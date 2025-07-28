@@ -93,7 +93,7 @@ def get_summaries_df(args):
         df = pd.concat([df, s], ignore_index=True)        
     return df
 
-def augment_df(df, metric, target_algo):
+def augment_df(df, metric, target_algo, show_names):
     # Step 1: Create an empty list to hold the new rows
     new_data = []
     
@@ -105,35 +105,38 @@ def augment_df(df, metric, target_algo):
         # Step 3: Get the best algorithm        
         best_algo_row = group.loc[group['bandwidth_' + metric].idxmax()]
         best_algo = best_algo_row['algo_name']
-        
-        # Step 4: Get the second best algorithm (excluding the best one)
-        tmp = group[group['algo_name'] != best_algo]['bandwidth_' + metric]
-        if tmp.empty:
-            print(f"Warning: No second best algorithm found for buffer_size {buffer_size} and nodes {nodes}. Skipping.", file=sys.stderr)
-            continue
-        second_best_algo_row = group.loc[tmp.idxmax()]
-        second_best_algo = second_best_algo_row['algo_name']
 
-        # Get target algo bandwidth_mean for this group
-        target_algo_row = group.loc[group['algo_name'] == target_algo]
-        if target_algo_row.empty:
-            print(f"Warning: No {target_algo} algorithm found for buffer_size {buffer_size} and nodes {nodes}. Skipping.", file=sys.stderr)
-            continue
-        
-        target_algo_bandwidth_mean = target_algo_row['bandwidth_' + metric].values[0]
+        if show_names:
+            cell = best_algo
+        else:        
+            # Step 4: Get the second best algorithm (excluding the best one)
+            tmp = group[group['algo_name'] != best_algo]['bandwidth_' + metric]
+            if tmp.empty:
+                print(f"Warning: No second best algorithm found for buffer_size {buffer_size} and nodes {nodes}. Skipping.", file=sys.stderr)
+                continue
+            second_best_algo_row = group.loc[tmp.idxmax()]
+            second_best_algo = second_best_algo_row['algo_name']
 
-        print(f"Buffer size: {buffer_size}, Nodes: {nodes}, Best algo: {best_algo}, Second best algo: {second_best_algo}")
-        #print(group)
+            # Get target algo bandwidth_mean for this group
+            target_algo_row = group.loc[group['algo_name'] == target_algo]
+            if target_algo_row.empty:
+                print(f"Warning: No {target_algo} algorithm found for buffer_size {buffer_size} and nodes {nodes}. Skipping.", file=sys.stderr)
+                continue
+            
+            target_algo_bandwidth_mean = target_algo_row['bandwidth_' + metric].values[0]
 
-        ratio = target_algo_bandwidth_mean / best_algo_row['bandwidth_' + metric]
-        # Truncate to 1 decimal place
-        ratio = round(ratio, 1)
-        
-        if best_algo == target_algo:
-            cell = best_algo_row['bandwidth_' + metric] / second_best_algo_row['bandwidth_' + metric]  
-        else:
-            cell = ratio         
-        
+            print(f"Buffer size: {buffer_size}, Nodes: {nodes}, Target algo: {target_algo} ({target_algo_bandwidth_mean:.2f}) Best algo: {best_algo} ({best_algo_row['bandwidth_' + metric]:.2f}), Second best algo: {second_best_algo} ({second_best_algo_row['bandwidth_' + metric]:.2f})")
+            #print(group)
+
+            ratio = target_algo_bandwidth_mean / best_algo_row['bandwidth_' + metric]
+            # Truncate to 1 decimal place
+            ratio = round(ratio, 1)
+            
+            if best_algo == target_algo:
+                cell = best_algo_row['bandwidth_' + metric] / second_best_algo_row['bandwidth_' + metric]  
+            else:
+                cell = ratio         
+            
         # Step 6: Append the data for this group (including old columns)
         new_data.append({
             'buffer_size': buffer_size,
@@ -146,6 +149,24 @@ def augment_df(df, metric, target_algo):
     # Step 7: Create a new DataFrame
     return pd.DataFrame(new_data)
 
+def algo_to_str(algo_name):
+    if algo_name == "allreduce_nccl_ring":
+        return "N-R"
+    elif algo_name == "allreduce_nccl_tree":
+        return "N-T"
+    elif algo_name == "allreduce_nccl_pat":
+        return "N-P"
+    elif algo_name == "allreduce_nccl_collnet":
+        return "N-C"
+    elif algo_name == "allreduce_nccl_nvls":
+        return "N-N"
+    elif algo_name == "allreduce_nccl_nvlstree":
+        return "N-E"    
+    elif algo_name == "allreduce_nccl_collnetdirect":
+        return "N-D"
+    elif algo_name == "allreduce_nccl_collnetdirectchain":
+        return "N-H"
+
 def main():
     parser = argparse.ArgumentParser(description="Generate graphs")
     parser.add_argument("--system", type=str, help="System name", required=True)
@@ -156,6 +177,7 @@ def main():
     parser.add_argument("--notes", type=str, help="Notes")   
     parser.add_argument("--exclude", type=str, help="Algos to exclude", default=None)   
     parser.add_argument("--metric", type=str, help="Metric to consider [mean|median|percentile_90]", default="mean")   
+    parser.add_argument("--show_names", action="store_true", help="Show algorithm names in the heatmap")
     args = parser.parse_args()
 
     #print("Called with args:")
@@ -167,10 +189,17 @@ def main():
     df = df[["buffer_size", "Nodes", "algo_name", "mean", "median", "percentile_90"]]
 
     if args.exclude:
+        # Save the rows with algo_name == args.target_algo
+        target_algo_row = df[df["algo_name"] == args.target_algo]
+        # Remove the target_algo from the df
+        df = df[df["algo_name"] != args.target_algo]
         for e in args.exclude.split(","):
-            # Remove the algo_name that contains e
+            # Remove the algo_name that contains e, but do not remove the one in target_algo
+            # e might be a substring of target_algo, so we need to check that                        
             df = df[~df["algo_name"].str.contains(e, case=False)]
-        
+        # Add back the rows with the target_algo
+        df = pd.concat([df, target_algo_row], ignore_index=True)
+    print(df)
     # Compute the bandwidth for each metric
     for m in metrics:
         if m == args.metric:
@@ -185,7 +214,7 @@ def main():
     pd.set_option('display.max_rows', None)
     pd.set_option('display.width', None)
 
-    df = augment_df(df, args.metric, args.target_algo)
+    df = augment_df(df, args.metric, args.target_algo, args.show_names)
     #print(df)
 
     # We need to separate numerical and string cells
@@ -224,6 +253,21 @@ def main():
     # Get the colorbar and set the font size
     cbar = ax.collections[0].colorbar
     cbar.ax.tick_params(labelsize=small_font_size)  # Adjust font size of ticks
+
+    if args.show_names:
+        ###############
+        # SET STRINGS #
+        ###############
+        for i in range(heatmap_data_string.shape[0]):
+            for j in range(heatmap_data_string.shape[1]):
+                val = heatmap_data_string.iloc[i, j]
+                # Check if the value is a string
+                if isinstance(val, str):
+                    val = algo_to_str(val)
+                    plt.text(j + 0.5, i + 0.5, val, ha='center', va='center', color='black', weight='bold', fontsize=big_font_size)
+                # Check if the value is NaN (not a number)
+                elif pd.isna(val):
+                    plt.text(j + 0.5, i + 0.5, "N/A", ha='center', va='center', color='black', weight='bold', fontsize=big_font_size)
 
     # For each ror use the corresponding buffer_size_hr rather than buffer_size as labels
     # Get all the row names, sort them (numerically), and the apply to each of them the human_readable_size function
