@@ -38,10 +38,10 @@ class LibRow(Horizontal):
             ),
             #WARN: Visualization problems of buttons when sceen is small
             Horizontal(
-                Switch(id=f"pico-backend-{self.index}", disabled=True, classes="field"),
-                Button("–", id=f"remove-{self.index}", disabled=(self.index == 1), classes="field"),
-                Button("+", id=f"add-{self.index}", disabled=True, classes="field"),
-                classes="field"
+                Switch(id=f"pico-backend-{self.index}", disabled=True, classes="switch-compact"),
+                Button("–", id=f"remove-{self.index}", disabled=(self.index == 1), classes="btn-grow"),
+                Button("+", id=f"add-{self.index}", disabled=True, classes="btn-grow"),
+                classes="row-task-actions",
             ),
             classes="row-task"
         )
@@ -62,8 +62,8 @@ class LibrariesStep(StepScreen):
             ),
             Horizontal(
                 Static("Custom collectives?", classes="field-label field"),
-                Static("Remove", classes="field-label field"),
-                Static("Add", classes="field-label field"),
+                Static("Remove", classes="field-label btn-grow"),
+                Static("Add", classes="field-label btn-grow"),
                 classes="field"
             ),
             classes="row-tight"

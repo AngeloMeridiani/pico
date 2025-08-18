@@ -528,3 +528,30 @@ SelectionList:focus {
 .full{
   height: 80%;
 }
+
+/* Container for the switch + buttons row */
+.row-task-actions {
+  layout: horizontal;
+  align-horizontal: left;
+  align-vertical: middle;
+  width: 1fr;     /* the row itself occupies the remaining width */
+}
+
+/* Make the switch fixed/compact, not flexing */
+.switch-compact {
+  width: auto;
+  min-width: 10;  /* or use your existing .field-mini */
+  max-width: 15;
+  margin: 0 1;
+}
+/* Let each button share the remaining space */
+.btn-grow {
+  width: 1fr;
+  min-width: 0;   /* IMPORTANT: allow shrinking on small screens */
+  margin: 0 1;
+}
+
+/* Tidy up the edges */
+.row-task-actions .btn-grow:last-child {
+  margin-right: 0;
+}
