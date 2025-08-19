@@ -7,6 +7,7 @@ trap cleanup SIGINT
 ####################################################################################
 #                           MAIN BENCHMARKING LOOP                                 #
 ####################################################################################
+# WARN: The division between tui loop and normal loop is temporary, it will be changed
 if [[ -d "$TUI_FILE" ]]; then
     iter=0
     for config in ${TEST_CONFIG_FILES[@]//,/ }; do
@@ -110,15 +111,13 @@ else
         # Space-separated for legacy ALGOS var
         export ALGOS="${ALGS_CSV//,/ }"
 
-        # 3) SKIP (space-separated names where ${COLL_UPPER}_ALGORITHMS_SKIP[i] == "yes")
-        SKIP_ARR_VAR="${COLL_UPPER}_ALGORITHMS_SKIP"
-        _read_array "$SKIP_ARR_VAR" _SKIP_FLAGS
-        if (( ${#_SKIP_FLAGS[@]} == 0 )); then
-            # If skip array not present, treat as all "no"
-            _SKIP_FLAGS=()
-            for ((i=0; i<${#_ALG_NAMES[@]}; i++)); do _SKIP_FLAGS+=(no); done
-        fi
-        export SKIP="$(_build_skip_from_flags _ALG_NAMES _SKIP_FLAGS)"
+        # 3) SKIP (space-separated from ${COLL_UPPER}_ALGORITHMS_SKIP which is comma-separated)
+        SKIPS_VAR="${COLL_UPPER}_ALGORITHMS_SKIP"
+        SKIPS_CSV="$(_get_var "$SKIPS_VAR")"
+        # Split into bash array of flags (no spaces in names expected)
+        IFS=',' read -r -a _SKIP_FLAGS <<< "$SKIPS_CSV"
+        # Space-separated for legacy SKIP var
+        export SKIP="${SKIPS_CSV//,/ }"
 
         # 4) IS_SEGMENTED (take from ${coll}_Algorithms_is_segmented[@] when available; else all "no")
         #    Note the exact requested name uses the *lower-case* key and mixed-case suffix.

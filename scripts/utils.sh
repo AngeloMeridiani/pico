@@ -837,21 +837,6 @@ _read_array() {
 }
 export -f _read_array
 
-_build_skip_from_flags() {
-  local -n __names_ref=$1
-  local -n __flags_ref=$2
-  local __out=""
-  local n i
-  n=${#__names_ref[@]}
-  for (( i=0; i<n; i++ )); do
-    if [[ "${__flags_ref[$i]}" == "yes" ]]; then
-      __out+="${__names_ref[$i]} "
-    fi
-  done
-  printf '%s' "${__out%% }"
-}
-export -f _build_skip_from_flags
-
 _build_all_no_array_literal() {
   local -n __names_ref=$1
   local n i

@@ -83,9 +83,9 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         lt = lib_type.strip().lower()
         if "open" in lt and "mpi" in lt:
             return "OMPI"
-        if "cray" in lt and "mpich" in lt:
+        if "cray" in lt:
             return "CRAY_MPICH"
-        if "mpich" in lt:
+        if "mpich" in lt and "cray" not in lt:
             return "MPICH"
         # Generic fallback: uppercase and normalize separators
         tag = re.sub(r"[^A-Za-z0-9]+", "_", lib_type).upper().strip("_")
@@ -99,7 +99,7 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         return name, version
 
     # --- Begin script (shebang only) ---
-    lines.append("#!/usr/bin/env bash")
+    lines.append("#!/bin/bash")
 
     # We'll assemble MODULES parts then write one consolidated export later
     python_module: str | None = None
@@ -151,6 +151,13 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
                         write_export("QOS", qname, quote=True)
                     else:
                         lines.append("# skipped: QOS required but name missing")
+                    extra_reqs = qos.get("extra_requirements")
+                    if isinstance(extra_reqs, dict):
+                        for k, v in extra_reqs.items():
+                            if is_number_like(v):
+                                write_export(f"QOS_{k.upper()}", v, quote=False)
+                            else:
+                                write_export(f"QOS_{k.upper()}", v, quote=True)
         else:
             lines.append("# skipped: environment.partition missing")
 
@@ -330,8 +337,17 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
                             if isinstance(c, dict) and c.get("key") == "count":
                                 has_count = True
                                 break
-                    skips.append("yes" if has_count else "no")
-                lines.append(f'export {coll_key.upper()}_ALGORITHMS_SKIP=({" ".join(skips)})')
+                    if has_count:
+                        skips.append(str(e.get("name", "")))
+                lines.append(f'export {coll_key.upper()}_ALGORITHMS_SKIP="{",".join(skips)}"')
+
+                # is segmented flags (yes if any constraint has segmented in tags
+                seg: List[str] = []
+                for e in entries:
+                    tags = e.get("tags", [])
+                    seg.append("no" if "segmented" not in tags else "yes")
+                lines.append(f'export {coll_key.upper()}_ALGORITHMS_SEGMENTED=({" ".join(seg)})')
+
 
     # --- Write file and chmod +x ---
     out_path.parent.mkdir(parents=True, exist_ok=True)
