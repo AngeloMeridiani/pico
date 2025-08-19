@@ -198,11 +198,12 @@ EOF
 
 usage() {
     inform "Usage:" "\$ $0 --location <LOCATION> --nodes <N_NODES> [options...]\n"
-    usage_required
+    inform "If used with tui json file:" "\$ $0 --file <TUI_FILE>\n"
 
     local help_verbosity=$1
     case "$help_verbosity" in
         full)
+            usage_required
             usage_general
             usage_gpu
             usage_data
@@ -211,6 +212,7 @@ usage() {
             usage_help
             ;;
         general)
+            usage_required
             usage_general
             ;;
         gpu)
@@ -232,7 +234,7 @@ usage() {
           ;;
     esac
 
-    inform "For full help, run: $0 --help-full"
+    inform "For full help, run: $0 --help-full (or -H)"
 }
 
 ###############################################################################
@@ -247,145 +249,82 @@ check_arg() {
 }
 
 parse_cli_args() {
+    # Short circuit if -f is given
+    local argv=("$@")
+    for ((i=0; i<${#argv[@]}; i++)); do
+        case "${argv[i]}" in
+            -f|--file)
+                export TUI_FILE="${argv[i+1]}"
+                return 0
+                ;;
+        esac
+    done
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
-          # Required arguments
-            --location)
-                export LOCATION="$2"
-                shift 2
-                ;;
-            --nodes)
-                export N_NODES="$2"
-                shift 2
-                ;;
+            # Required arguments
+            -l|--location)
+                export LOCATION="$2"; shift 2 ;;
+            -N|--nodes)
+                export N_NODES="$2"; shift 2 ;;
             # General options
             --ntasks-per-node)
-                check_arg "$1" "$2"
-                export TASKS_PER_NODE="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export TASKS_PER_NODE="$2"; shift 2 ;;
             --ntasks)
-                export FORCE_TASKS="$2"
-                shift 2
-                ;;
+                export FORCE_TASKS="$2"; shift 2 ;;
             --compile-only)
-                check_arg "$1" "$2"
-                export COMPILE_ONLY="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export COMPILE_ONLY="$2"; shift 2 ;;
             --output-dir)
-                check_arg "$1" "$2"
-                export TIMESTAMP="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export TIMESTAMP="$2"; shift 2 ;;
             --types)
-                check_arg "$1" "$2"
-                export TYPES="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export TYPES="$2"; shift 2 ;;
             --sizes)
-                check_arg "$1" "$2"
-                export SIZES="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export SIZES="$2"; shift 2 ;;
             --segment-sizes)
-                check_arg "$1" "$2"
-                export SEGMENT_SIZES="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export SEGMENT_SIZES="$2"; shift 2 ;;
             --collectives)
-                check_arg "$1" "$2"
-                export COLLECTIVES="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export COLLECTIVES="$2"; shift 2 ;;
             # GPU options
             --gpu-awareness)
-                check_arg "$1" "$2"
-                export GPU_AWARENESS="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export GPU_AWARENESS="$2"; shift 2 ;;
             --gpu-per-node)
-                check_arg "$1" "$2"
-                export GPU_PER_NODE="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export GPU_PER_NODE="$2"; shift 2 ;;
             # Data saving options
             --output-level)
-                check_arg "$1" "$2"
-                export OUTPUT_LEVEL="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export OUTPUT_LEVEL="$2"; shift 2 ;;
             --compress)
-                check_arg "$1" "$2"
-                export COMPRESS="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export COMPRESS="$2"; shift 2 ;;
             --delete)
-                check_arg "$1" "$2"
-                export DELETE="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export DELETE="$2"; shift 2 ;;
             --notes)
-                check_arg "$1" "$2"
-                export NOTES="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export NOTES="$2"; shift 2 ;;
             # Various SLURM options
             --time)
-                check_arg "$1" "$2"
-                export TEST_TIME="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export TEST_TIME="$2"; shift 2 ;;
             --exclude-nodes)
-                check_arg "$1" "$2"
-                export EXCLUDE_NODES="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export EXCLUDE_NODES="$2"; shift 2 ;;
             --job-dep)
-                check_arg "$1" "$2"
-                export JOB_DEP="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export JOB_DEP="$2"; shift 2 ;;
             --other-params)
-                check_arg "$1" "$2"
-                export OTHER_SLURM_PARAMS="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export OTHER_SLURM_PARAMS="$2"; shift 2 ;;
             --interactive)
-                check_arg "$1" "$2"
-                export INTERACTIVE="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export INTERACTIVE="$2"; shift 2 ;;
             # Debug options
             --debug)
-                check_arg "$1" "$2"
-                export DEBUG_MODE="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export DEBUG_MODE="$2"; shift 2 ;;
             --dry-run)
-                check_arg "$1" "$2"
-                export DRY_RUN="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export DRY_RUN="$2"; shift 2 ;;
             --show-env)
-                check_arg "$1" "$2"
-                export SHOW_ENV="$2"
-                shift 2
-                ;;
+                check_arg "$1" "$2"; export SHOW_ENV="$2"; shift 2 ;;
             # Help messages
-            --help)
-                usage
-                exit 0
-                ;;
-            --help-full)
-                usage "full"
-                exit 0
-                ;;
+            -h|--help)
+                usage; exit 0 ;;
+            -H|--help-full)
+                usage "full"; exit 0 ;;
             *)
-                error "Error: Unknown option $1" >&2
+                error "Error: Unknown option $1"
                 usage "full"
-                cleanup
-                ;;
+                cleanup ;;
         esac
     done
 }
@@ -546,7 +485,7 @@ source_environment() {
     if [[ "$LOCATION" != "local" ]]; then
         required_vars+=(
             PARTITION
-            ACCOUNT
+            PICO_ACCOUNT
         )
     fi
 
@@ -731,7 +670,6 @@ print_sanity_checks() {
 
     inform "System Information:"
     echo "  • MPI Library:           $MPI_LIB $MPI_LIB_VERSION"
-    echo "  • Libbine Version:      $LIBBINE_VERSION"
     echo "  • GPU awareness:         $GPU_AWARENESS"
     if [[ "$GPU_AWARENESS" == "yes" ]]; then
         echo "  • GPU per node:          $CURRENT_TASKS_PER_NODE"
@@ -771,7 +709,7 @@ export -f get_iterations
 run_bench() {
     local size=$1 algo=$2 type=$3
     local iter=$(get_iterations $size)
-    local command="$RUN $RUNFLAGS -n $MPI_TASKS $BENCH_EXEC $size $iter $algo $type"
+    local command="$RUN $RUNFLAGS -n $MPI_TASKS $PICO_EXEC $size $iter $algo $type"
 
     [[ "$DEBUG_MODE" == "yes" ]] && inform "DEBUG: $COLLECTIVE_TYPE -> $MPI_TASKS processes ($N_NODES nodes), $size array size, $type datatype ($algo)" && [[ "$SEGMENTED" == "yes" ]] && echo "Segment size: $SEGSIZE"
 
@@ -871,3 +809,76 @@ run_all_tests() {
     done
 }
 export -f run_all_tests
+
+###############################################################################
+# TEMPORARY TRANSLATION LAYER TO ALLOW FOR TUI FILE, to be removed
+###############################################################################
+_get_var() {
+  local __name="$1"
+  printf '%s' "${!__name-}"
+}
+export -f _get_var
+
+_var_declared() {
+  local __name="$1"
+  declare -p "$__name" &>/dev/null
+}
+export -f _var_declared
+
+_read_array() {
+  local __name="$1"
+  local __out="$2"
+  if _var_declared "$__name"; then
+    # shellcheck disable=SC2178,SC2154
+    eval "$__out=(\"\${$__name[@]}\")"
+  else
+    eval "$__out=()"
+  fi
+}
+export -f _read_array
+
+_build_skip_from_flags() {
+  local -n __names_ref=$1
+  local -n __flags_ref=$2
+  local __out=""
+  local n i
+  n=${#__names_ref[@]}
+  for (( i=0; i<n; i++ )); do
+    if [[ "${__flags_ref[$i]}" == "yes" ]]; then
+      __out+="${__names_ref[$i]} "
+    fi
+  done
+  printf '%s' "${__out%% }"
+}
+export -f _build_skip_from_flags
+
+_build_all_no_array_literal() {
+  local -n __names_ref=$1
+  local n i
+  n=${#__names_ref[@]}
+  local out="("
+  for (( i=0; i<n; i++ )); do
+    out+="no "
+  done
+  out="${out%% }"
+  out+=")"
+  printf '%s' "$out"
+}
+export -f _build_all_no_array_literal
+
+
+load_other_env_var(){
+    if [[ "$MPI_LIB" == "OMPI" ]]; then
+        export OMPI_MCA_coll_hcoll_enable=0
+        export OMPI_MCA_coll_tuned_use_dynamic_rules=1
+        if [ "$GPU_AWARENESS" == "no" ]; then
+            export OMPI_MCA_btl="^smcuda"
+            export OMPI_MCA_mpi_cuda_support=0
+        else
+            export OMPI_MCA_btl=""
+            export OMPI_MCA_mpi_cuda_support=1
+        fi
+    fi
+}
+export -f load_other_env_var
+

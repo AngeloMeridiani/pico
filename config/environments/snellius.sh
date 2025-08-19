@@ -4,7 +4,7 @@ export RUN=srun
 export RUNFLAGS=--mpi=pmix
 
 export PARTITION=rome
-export ACCOUNT=vusei7310
+export PICO_ACCOUNT=vusei7310
 export MODULES="python"
 
 # TODO: insert correct values

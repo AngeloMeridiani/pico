@@ -44,12 +44,14 @@ def process_benchmark_file(file_path, warmup_ratio=0.2):
     df = df.iloc[warmup_count:]
 
     highest = df['highest'].values.astype(np.float64)
+    # Drop negative values
+    highest = highest[highest >= 0]
     n_iter = len(highest)
 
     mean = np.mean(highest)
     median = np.median(highest)
-    std = np.std(highest, ddof=1)
-    var = np.var(highest, ddof=1)
+    std = np.std(highest)
+    var = np.var(highest)
     min_val = np.min(highest)
     max_val = np.max(highest)
 

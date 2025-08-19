@@ -14,6 +14,8 @@ from matplotlib import rcParams
 import matplotlib
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+sns.set_context("paper")
+
 matplotlib.rc('pdf', fonttype=42) # To avoid issues with camera-ready submission
 rcParams['figure.figsize'] = 6.75,6.75
 big_font_size = 18

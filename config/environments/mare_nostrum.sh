@@ -4,7 +4,7 @@ export RUN=srun
 
 # Account/partition specific variables
 export PARTITION=acc
-export ACCOUNT=ehpc181
+export PICO_ACCOUNT=ehpc181
 
 export UCX_MAX_RNDV_RAILS=1
 export NOTES="$NOTES UCX_MAX_RNDV_RAILS=$UCX_MAX_RNDV_RAILS"

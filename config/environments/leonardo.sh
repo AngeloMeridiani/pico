@@ -4,7 +4,7 @@ export RUN=srun
 
 # Account/partition specific variables
 export PARTITION=boost_usr_prod
-export ACCOUNT=IscrB_BINE
+export PICO_ACCOUNT=IscrB_BINE
 if [[ "$PARTITION" == "boost_usr_prod" ]]; then
     export PARTITION_GPUS_PER_NODE=4
     export PARTITION_CPUS_PER_NODE=32

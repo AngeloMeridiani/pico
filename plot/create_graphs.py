@@ -4,11 +4,14 @@
 import os, sys, argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 import seaborn as sns
 
+sns.set_palette("tab10")
+sns.set_style("whitegrid")
+sns.set_context("paper")
 
 def format_bytes(x):
-    # Ensure x is a float
     try:
         x = float(x)
     except ValueError:
@@ -30,6 +33,15 @@ def sort_key(algo: str):
         return (2, algo)
     else:
         return (3, algo)
+
+# --- NEW: helper to build a stable tab10 palette for a given ordered list of algos
+def build_tab10_palette(sorted_algos):
+    """
+    Return a dict mapping each algo to a color from matplotlib's tab10 palette,
+    cycling if there are more than 10 algorithms.
+    """
+    colors = plt.get_cmap('tab10').colors
+    return {algo: colors[i % len(colors)] for i, algo in enumerate(sorted_algos)}
 
 # Global error bar drawing function that supports both absolute and relative threshold modes.
 def draw_errorbars(ax, data, sorted_algos, std_threshold, threshold_mode='absolute', loc=0.05, top=False, y_min = 2.0):
@@ -118,48 +130,152 @@ def normalize_dataset(data: pd.DataFrame, mpi_lib : str, gpu_lib : str, base : s
 
     return data
 
-def generate_lineplot(data: pd.DataFrame, system, collective, nnodes, datatype, timestamp, mpi_tasks):
+def format_time_units_ns(value, _):
+    """Format nanosecond values into ns / µs / ms without unnecessary .0."""
+    if value < 1_000:  # < 1 µs
+        return f"{int(value)}ns" if value.is_integer() else f"{value:.1f} ns"
+    elif value < 1_000_000:  # < 1 ms
+        val = value / 1_000
+        return f"{int(val)}µs" if val.is_integer() else f"{val:.1f} µs"
+    else:
+        val = value / 1_000_000
+        return f"{int(val)}ms" if val.is_integer() else f"{val:.1f} ms"
+
+def generate_lineplot(
+    data: pd.DataFrame,
+    system,
+    collective,
+    nnodes,
+    datatype,
+    timestamp,
+    mpi_tasks,
+    error_col: str | None = "se",           # set to None to disable errorbars
+    error_mode: str = "band"                # "bar" for errorbar caps, "band" for fill_between
+):
     """
-    Create line plots with logarithmic scale on both axis.
+    Create line plots with logarithmic scales using seaborn and draw error bars
+    from a precomputed column (default: 'standard_error').
+
+    Fallbacks for error if 'standard_error' is not available:
+      1) if 'std' and 'n_iter' exist: std / sqrt(n_iter)
+      2) if 'ci_lower' and 'ci_upper' exist: (ci_upper - ci_lower) / 2
+      3) if 'percentile_10' and 'percentile_90' exist: (p90 - p10) / 2
+    Set error_col=None to disable error rendering.
+    error_mode: "bar" (cap lines via ax.errorbar) or "band" (shaded CI).
     """
+    # Stable algo order + tab10 colors
+    sorted_algos = sorted(data['algo_name'].unique().tolist(), key=sort_key)
+    palette = build_tab10_palette(sorted_algos)
+
+    # Sort by x for nicer lines
+    df = data.sort_values("buffer_size").copy()
+
+    # Decide error vector (same length as df)
+    err_series = None
+    if error_col == "std" and {'std', 'n_iter'}.issubset(df.columns):
+        err_series = df['std']
+    elif error_col == "ci" and {'ci_lower', 'ci_upper'}.issubset(df.columns):
+        err_series = (df['ci_upper'] - df['ci_lower']) / 2.0
+    elif error_col == "se" and 'standard_error' in df.columns:
+        err_series = df['standard_error']
+    elif error_col == "iqr" and {'iqr'}.issubset(df.columns):  # fixed: use set, not string
+        err_series = df['iqr'] / 2.0
+    elif error_col == "percentiles" and {'percentile_10', 'percentile_90'}.issubset(df.columns):
+        err_series = (df['percentile_90'] - df['percentile_10']) / 2.0
 
     plt.figure(figsize=(12, 8))
-    
-    # Group data by algorithm and plot each group
-    for algo, group in data.groupby('algo_name'):
-        sorted_group = group.sort_values('buffer_size')
-        if isinstance(sorted_group, pd.DataFrame): # silence warning with isinstance
-            plt.plot(sorted_group['buffer_size'], sorted_group['mean'], label=algo, marker='*', markersize=5, linewidth=1)
+    ax = sns.lineplot(
+        data=df,
+        x="buffer_size",
+        y="mean",
+        hue="algo_name",
+        style="algo_name",
+        hue_order=sorted_algos,
+        palette=palette,
+        markers=True,
+        markersize=9,
+        linewidth=2
+    )
 
-    if (nnodes == mpi_tasks):
-        plt.title(f'{system}, {collective.lower()}, {nnodes} nodes', fontsize=18)
-    else:
-        plt.title(f'{system}, {collective.lower()}, {nnodes} nodes ({mpi_tasks} tasks)', fontsize=18)
-    plt.xlabel('Array Size (Bytes)', fontsize=15)
-    plt.ylabel('Mean Execution Time (ns)', fontsize=15)
+    # Overlay error visualization per algorithm
+    if err_series is not None:
+        df = df.assign(__err=err_series.astype(float))
+        if error_mode == "band":
+            # Shaded band per series
+            for algo, g in df.groupby('algo_name'):
+                g = g.sort_values('buffer_size')
+                x = g['buffer_size'].values
+                y = g['mean'].values
+                e = g['__err'].values
+                ax.fill_between(x, y - e, y + e, alpha=0.15, zorder=2, color=palette.get(algo))
+        else:
+            # Bar-style caps
+            for algo, g in df.groupby('algo_name'):
+                g = g.sort_values('buffer_size')
+                ax.errorbar(
+                    g['buffer_size'].values,
+                    g['mean'].values,
+                    yerr=g['__err'].values,
+                    fmt='none',
+                    ecolor='black',
+                    elinewidth=1,
+                    capsize=3,
+                    zorder=4
+                )
+
+    # Scales first, so Matplotlib won't overwrite our custom ticks later
     plt.xscale('log')
     plt.yscale('log')
-    plt.grid(True, linestyle='--', linewidth=0.25)
+
+    # --- Ticks exactly under the data points ---
+    xticks = sorted(pd.unique(df['buffer_size']).astype(float))
+    ax.set_xticks(xticks)
+    ax.set_xticklabels([format_bytes(x) for x in xticks])
+
+    # Y-axis: automatic ns / µs / ms formatting
+    ax.yaxis.set_major_formatter(FuncFormatter(format_time_units_ns))
+
+    # Title
+    if nnodes == mpi_tasks:
+        plt.title(f'{system.capitalize()}, {collective.lower().capitalize()}, {nnodes} nodes', fontsize=18)
+    else:
+        plt.title(f'{system.capitalize()}, {collective.lower().capitalize()}, {nnodes} nodes ({mpi_tasks} tasks)', fontsize=18)
+
+    # Axes labels & grid
+    ax.set_xlabel('Message Size', fontsize=15)
+    ax.set_ylabel('Execution Time', fontsize=15)
+
+    # Legend layout (fixed logic)
+    if len(sorted_algos) > 10:
+        ncols = 3
+    elif len(sorted_algos) > 5:
+        ncols = 2
+    else:
+        ncols = 1
+
+    handles, labels = ax.get_legend_handles_labels()
+    new_labels = [' '.join(w.capitalize() for w in lbl.replace('_', ' ').split() if w not in ('over', 'ompi', 'distance'))
+                  for lbl in labels]
+    ax.legend(handles, new_labels, fontsize=20, loc='upper left', ncol=ncols, frameon=True)
+
     plt.tight_layout()
 
-    ncols = 1
-    if (len(data['algo_name'].unique()) > 5):
-        ncols = 2
-    elif (len(data['algo_name'].unique()) > 10):
-        ncols = 3
-    plt.legend(ncol=ncols, fontsize=13)
-
-    name = f'{collective.lower()}_{nnodes}_{datatype}_{timestamp}_lineplot.png'
-    dir = f'plot/{system}'
-    full_name = os.path.join(dir, name)
+    # Save
+    name = f'{collective.lower()}_{nnodes}_{datatype}_{timestamp}_{error_col}_lineplot.png'
+    out_dir = f'plot/{system}'
+    os.makedirs(out_dir, exist_ok=True)
+    full_name = os.path.join(out_dir, name)
     plt.savefig(full_name, dpi=300)
     plt.close()
 
-def generate_barplot(data: pd.DataFrame, system, collective, nnodes, datatype, timestamp, mpi_tasks, std_threshold: float = 0.5):
+
+def generate_barplot(data: pd.DataFrame, system, collective, nnodes, datatype, timestamp, mpi_tasks, std_threshold: float = 0.15):
     # Get the sorted list of unique algorithm names
     sorted_algos = sorted(data['algo_name'].unique().tolist(), key=sort_key)
 
     plt.figure(figsize=(12, 8))
+
+    palette = build_tab10_palette(sorted_algos)
 
     # Use the sorted list in hue_order so that the bars are plotted in our desired order
     ax = sns.barplot(
@@ -168,8 +284,8 @@ def generate_barplot(data: pd.DataFrame, system, collective, nnodes, datatype, t
         y='normalized_mean',
         hue='algo_name',
         hue_order=sorted_algos,
-        palette='tab10',
-        errorbar=None
+        errorbar=None,
+        palette=palette
     )
 
     # Draw error markers using the global draw_errorbars in absolute mode.
@@ -192,12 +308,15 @@ def generate_barplot(data: pd.DataFrame, system, collective, nnodes, datatype, t
             ncols = 2
         elif (len(handles) > 10):
             ncols = 3
-        ax.legend(handles, labels, ncol=ncols,loc='upper left', fontsize=9)
+        new_labels = [' '.join(w.capitalize() for w in lbl.replace('_', ' ').split() if w not in ('over', 'ompi', 'distance'))
+                    for lbl in labels]
+        ax.legend(handles, new_labels, ncol=ncols,loc='lower left', fontsize=20)
 
-    if (nnodes == mpi_tasks):
-        plt.title(f'{system}, {collective.lower()}, {nnodes} nodes', fontsize=18)
+    if nnodes == mpi_tasks:
+        plt.title(f'{system.capitalize()}, {collective.lower().capitalize()}, {nnodes} nodes', fontsize=18)
     else:
-        plt.title(f'{system}, {collective.lower()}, {nnodes} nodes ({mpi_tasks} tasks)', fontsize=18)
+        plt.title(f'{system.capitalize()}, {collective.lower().capitalize()}, {nnodes} nodes ({mpi_tasks} tasks)', fontsize=18)
+
     plt.xlabel('Message Size', fontsize=15)
     plt.ylabel('Normalized Execution Time', fontsize=15)
     plt.grid(True, which='both', linestyle='-', linewidth=0.5, axis='y')
@@ -213,6 +332,7 @@ def generate_barplot(data: pd.DataFrame, system, collective, nnodes, datatype, t
 def generate_cut_barplot(data: pd.DataFrame, system, collective, nnodes, datatype, timestamp, mpi_tasks, std_threshold : float = 0.5) :
     # Compute the sorted order of algorithm names
     sorted_algos = sorted(data['algo_name'].unique().tolist(), key=sort_key)
+    palette = build_tab10_palette(sorted_algos)
 
     fig, (ax_top, ax_bot) = plt.subplots(
         2, 1, sharex=True,
@@ -228,7 +348,7 @@ def generate_cut_barplot(data: pd.DataFrame, system, collective, nnodes, datatyp
         y='normalized_mean',
         hue='algo_name',
         hue_order=sorted_algos,
-        palette='tab10',
+        palette=palette,
         errorbar=None
     )
     sns.barplot(
@@ -238,7 +358,7 @@ def generate_cut_barplot(data: pd.DataFrame, system, collective, nnodes, datatyp
         y='normalized_mean',
         hue='algo_name',
         hue_order=sorted_algos,
-        palette='tab10',
+        palette=palette,
         errorbar=None
     )
 

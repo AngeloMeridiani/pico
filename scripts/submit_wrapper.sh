@@ -39,13 +39,17 @@ export INTERACTIVE=$DEFAULT_INTERACTIVE
 # 2. Parse and validate command line arguments
 parse_cli_args "$@"
 
-# 3. Set the location-specific configuration (defined in `config/environment/$LOCATION.sh`)
-source_environment || exit 1
+if [[ -n "$TUI_FILE" ]]; then
+    success "Using TUI file: $TUI_FILE"
+    warning "Ignoring other command line arguments"
+    [[ -f "$TUI_FILE" ]] || { error "TUI file '$TUI_FILE' does not exist."; exit 1; }
+    source $TUI_FILE
+else
+    source_environment || exit 1
+    validate_args || exit 1
+fi
 
-# 4. Validate all the given arguments
-validate_args || exit 1
-
-# 5. Load required modules (defined in `config/environment/$LOCATION.sh`)
+# 5. Load required modules
 load_modules || exit 1
 
 # 6. Activate the virtual environment, install Python packages if not presents
@@ -62,8 +66,8 @@ compile_code || exit 1
 export ALGORITHM_CONFIG_FILE="$BINE_DIR/config/algorithm_config.json"
 export LOCATION_DIR="$BINE_DIR/results/$LOCATION"
 export OUTPUT_DIR="$BINE_DIR/results/$LOCATION/$TIMESTAMP"
-export BENCH_EXEC_CPU=$BINE_DIR/bin/bench
-[[ "$GPU_AWARENESS" == "yes" ]] && export BENCH_EXEC_GPU=$BINE_DIR/bin/bench_cuda
+export PICO_EXEC_CPU=$BINE_DIR/bin/pico_core
+[[ "$GPU_AWARENESS" == "yes" ]] && export PICO_EXEC_GPU=$BINE_DIR/bin/pico_core_cuda
 export ALGO_CHANGE_SCRIPT=$BINE_DIR/selector/change_dynamic_rules.py
 export DYNAMIC_RULE_FILE=$BINE_DIR/selector/ompi_dynamic_rules.txt
 
@@ -78,7 +82,8 @@ fi
 if [[ "$LOCATION" == "local" ]]; then
     scripts/run_test_suite.sh
 else
-    SLURM_PARAMS="--account $ACCOUNT --nodes $N_NODES --time $TEST_TIME --partition $PARTITION"
+    [[ -z "$PICO_ACCOUNT" ]] && error "PICO_ACCOUNT environment variable not set, please export it with your slurm project's name" && exit 1
+    SLURM_PARAMS=" --account $PICO_ACCOUNT --nodes $N_NODES --time $TEST_TIME --partition $PARTITION"
 
     if [[ -n "$QOS" ]]; then
         SLURM_PARAMS+=" --qos $QOS"
@@ -97,9 +102,10 @@ else
     [[ -n "$JOB_DEP" ]] && SLURM_PARAMS+=" --dependency=afterany:$JOB_DEP"
     [[ -n "$OTHER_SLURM_PARAMS" ]] && SLURM_PARAMS+=" $OTHER_SLURM_PARAMS"
 
+
     if [[ "$INTERACTIVE" == "yes" ]]; then
-        inform "Salloc with parameters: $SLURM_PARAMS"
         export SLURM_PARAMS="$SLURM_PARAMS"
+        inform "Salloc with parameters: $SLURM_PARAMS"
         salloc $SLURM_PARAMS
     else
         [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]] && SLURM_PARAMS+=" --exclusive --output=$OUTPUT_DIR/slurm_%j.out --error=$OUTPUT_DIR/slurm_%j.err" || SLURM_PARAMS+=" --output=debug_%j.out"
