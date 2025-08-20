@@ -99,7 +99,7 @@ else
         SLURM_PARAMS+=" --gpus-per-node $MAX_GPU_TEST"
     fi
 
-    if [[ "$LOCATION" != "leonardo" ]]; then # leonardo removed the possiblility to ask for exclusive nodes if using ntasks-per-node parameter
+    if [[ "$LOCATION" != "leonardo" || -n "$SLURM_TASKS_PER_NODE" ]]; then # leonardo removed the possiblility to ask for exclusive nodes if using ntasks-per-node parameter
         [[ -n "$FORCE_TASKS" && -z "$QOS_TASKS_PER_NODE" ]] && SLURM_PARAMS+=" --ntasks $FORCE_TASKS" || SLURM_PARAMS+=" --ntasks-per-node $SLURM_TASKS_PER_NODE"
     fi
     [[ -n "$GRES" ]] && SLURM_PARAMS+=" --gres=$GRES"
