@@ -4,7 +4,7 @@ export RUN=srun
 
 # Account/partition specific variables
 export PARTITION=standard-g
-export PICO_ACCOUNT=project_465000997
+export PICO_ACCOUNT=project_465001736
 
 if [[ "$PARTITION" == "standard-g" ]]; then
     export PARTITION_GPUS_PER_NODE=4
