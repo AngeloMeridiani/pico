@@ -100,7 +100,12 @@ else
     fi
 
     if [[ "$LOCATION" != "leonardo" || -n "$SLURM_TASKS_PER_NODE" ]]; then # leonardo removed the possiblility to ask for exclusive nodes if using ntasks-per-node parameter
-        [[ -n "$FORCE_TASKS" && -z "$QOS_TASKS_PER_NODE" ]] && SLURM_PARAMS+=" --ntasks $FORCE_TASKS" || SLURM_PARAMS+=" --ntasks-per-node $SLURM_TASKS_PER_NODE"
+        if [[ -n "$FORCE_TASKS" && -z "$QOS_TASKS_PER_NODE" ]]; then
+            SLURM_PARAMS+=" --ntasks $FORCE_TASKS"
+        else
+            T_PER_NODE="${SLURM_TASKS_PER_NODE:-$TASKS_PER_NODE}"
+            SLURM_PARAMS+=" --ntasks-per-node $T_PER_NODE"
+        fi
     fi
     [[ -n "$GRES" ]] && SLURM_PARAMS+=" --gres=$GRES"
     [[ -n "$EXCLUDE_NODES" ]] && SLURM_PARAMS+=" --exclude $EXCLUDE_NODES" 
