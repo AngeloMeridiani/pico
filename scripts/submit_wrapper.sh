@@ -6,9 +6,12 @@ source scripts/utils.sh
 if [[ -n "${BASH_SOURCE[0]}" ]]; then
     export BINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 else
-    echo "Warning: BASH_SOURCE is not set. Using current working directory as fallback."
+  warning "BASH_SOURCE is not set.""Using current working directory (pwd) as fallback.""This may cause issues in some environments"
     export BINE_DIR="$(pwd)"
 fi
+
+
+[[ -z "$PICO_ACCOUNT" ]] && warning "PICO_ACCOUNT environment variable not set, please export it with your slurm project's name" && exit 0
 
 export TASKS_PER_NODE=$DEFAULT_TASKS_PER_NODE
 export COMPILE_ONLY=$DEFAULT_COMPILE_ONLY
@@ -82,7 +85,6 @@ fi
 if [[ "$LOCATION" == "local" ]]; then
     scripts/run_test_suite.sh
 else
-    [[ -z "$PICO_ACCOUNT" ]] && error "PICO_ACCOUNT environment variable not set, please export it with your slurm project's name" && exit 1
     SLURM_PARAMS=" --account $PICO_ACCOUNT --nodes $N_NODES --time $TEST_TIME --partition $PARTITION"
 
     if [[ -n "$QOS" ]]; then
@@ -96,7 +98,9 @@ else
         SLURM_PARAMS+=" --gpus-per-node $MAX_GPU_TEST"
     fi
 
-    [[ -n "$FORCE_TASKS" && -z "$QOS_TASKS_PER_NODE" ]] && SLURM_PARAMS+=" --ntasks $FORCE_TASKS" || SLURM_PARAMS+=" --ntasks-per-node $SLURM_TASKS_PER_NODE"
+    if [[ "$LOCATION" != "leonardo" ]]; then # leonardo removed the possiblility to ask for exclusive nodes if using ntasks-per-node parameter
+        [[ -n "$FORCE_TASKS" && -z "$QOS_TASKS_PER_NODE" ]] && SLURM_PARAMS+=" --ntasks $FORCE_TASKS" || SLURM_PARAMS+=" --ntasks-per-node $SLURM_TASKS_PER_NODE"
+    fi
     [[ -n "$GRES" ]] && SLURM_PARAMS+=" --gres=$GRES"
     [[ -n "$EXCLUDE_NODES" ]] && SLURM_PARAMS+=" --exclude $EXCLUDE_NODES" 
     [[ -n "$JOB_DEP" ]] && SLURM_PARAMS+=" --dependency=afterany:$JOB_DEP"

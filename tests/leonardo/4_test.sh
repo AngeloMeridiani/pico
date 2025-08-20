@@ -27,4 +27,4 @@ export ALLGATHER_ALGORITHMS_SKIP="default_ompi,linear_ompi,k_bruck_ompi,recursiv
 export ALLGATHER_ALGORITHMS_SEGMENTED=(no no no no no no no no no no no)
 export ALLREDUCE_ALGORITHMS="default_ompi,recursive_doubling_ompi,ring_ompi,ring_segmented_ompi,rabenseifner_ompi,bine_lat_over,bine_bdw_remap_over,bine_bdw_remap_segmented_over"
 export ALLREDUCE_ALGORITHMS_SKIP="ring_ompi,ring_segmented_ompi,rabenseifner_ompi,bine_bdw_remap_over,bine_bdw_remap_segmented_over"
-export ALLREDUCE_ALGORITHMS_SEGMENTED=(no no no yes no no no no)
+export ALLREDUCE_ALGORITHMS_SEGMENTED=(no no no yes no no no yes)

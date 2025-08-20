@@ -132,6 +132,7 @@ else
             for val in "${_IS_SEGMENTED[@]}"; do seg_literal+="${val} "; done
             seg_literal="${seg_literal%% }"
             seg_literal+=")"
+            echo "Exporting IS_SEGMENTED as: $seg_literal"
             eval "export IS_SEGMENTED=${seg_literal}"
         fi
 
