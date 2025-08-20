@@ -140,6 +140,8 @@ else
             fi
         fi
 
+        # 5) if MPI_LIB is CRAY_MPICH or MPICH create a CVAR
+
         # Now --gpu-per-node is analyzed. It is a comma separated list of GPUs per node.
         # We need to iterate through it and set the GPU_AWARENESS variable accordingly.
         # When a 0 is found, the GPU_AWARENESS is set to no and the test is run on CPU,

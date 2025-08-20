@@ -224,6 +224,7 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
     libs = data.get("libraries")
     first_lib = libs[0] if isinstance(libs, list) and libs else None
     gpu_awareness_yes = False
+    lib_type = ''
     if not isinstance(first_lib, dict):
         lines.append("# skipped: libraries[0] not found")
     else:
@@ -265,10 +266,7 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
             write_export("GPU_PER_NODE", gpu_per_node_csv, quote=True)
             # GPU awareness = yes if any non-zero value exists
             gpu_awareness_yes = any(int(v) != 0 for v in gpu_list if is_number_like(v))
-        else:
-            write_export("GPU_PER_NODE", "0", quote=True)
-            gpu_awareness_yes = False
-        write_export("GPU_AWARENESS", "yes" if gpu_awareness_yes else "no", quote=True)
+            write_export("GPU_AWARENESS", "yes" if gpu_awareness_yes else "no", quote=True)
 
         # lib_load module candidate
         lib_load = first_lib.get("lib_load")
@@ -347,6 +345,14 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
                     tags = e.get("tags", [])
                     seg.append("no" if "is_segmented" not in tags else "yes")
                 lines.append(f'export {coll_key.upper()}_ALGORITHMS_IS_SEGMENTED="{",".join(seg)}"')
+
+                if lib_type and "mpich" in lib_type.lower():
+                    cvar: List[str] = []
+                    for e in entries:
+                        var = e.get("selection", "auto")
+                        cvar.append(var if var != "pico" else "auto")
+                    lines.append(f'export {coll_key.upper()}_ALGORITHMS_CVARS="{",".join(cvar)}"')
+
 
 
     # --- Write file and chmod +x ---

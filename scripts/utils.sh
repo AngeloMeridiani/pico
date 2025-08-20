@@ -825,18 +825,6 @@ _var_declared() {
 }
 export -f _var_declared
 
-_read_array() {
-  local __name="$1"
-  local __out="$2"
-  if _var_declared "$__name"; then
-    # shellcheck disable=SC2178,SC2154
-    eval "$__out=(\"\${$__name[@]}\")"
-  else
-    eval "$__out=()"
-  fi
-}
-export -f _read_array
-
 _build_all_no_array_literal() {
   local -n __names_ref=$1
   local n i

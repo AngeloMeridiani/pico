@@ -25,6 +25,9 @@ Benchmarking collectives at scale is hard. Libraries vary, hardware stacks are c
 - **Multi-library support**:
   - ✅ MPI (OMPI, MPICH, Cray MPICH)
   - ✅ NCCL (NVIDIA)
+- **Simplify and guided interfaces**:
+  - ✅ Interactive Terminal UI (TUI) for guided configuration
+  - ✅ Command-Line Interface (CLI) still possible
 - **Extensibility**:
   - Plug in new collectives or libraries with minimal glue code.
 - **Reproducibility**:
@@ -32,8 +35,6 @@ Benchmarking collectives at scale is hard. Libraries vary, hardware stacks are c
   - JSON-based configuration and results logging.
 - **Integrated visualization**:
   - CSV output, tracer utilities, and publication-ready plots.
-- **Active TUI development**:
-  - CLI-based now, full interactive UI under construction.
 
 
 ## 🚀 Quickstart
@@ -44,9 +45,12 @@ To explore available benchmarking options or start a test, run:
 scripts/submit_wrapper.sh --help
 ````
 
-This command-line tool will guide you through job setup and execution.
+You can configure and launch benchmarks either via the CLI or through the TUI for an interactive experience.
 
-> A full-featured **Terminal UI (TUI)** for interactive config generation is in active development.
+If the TUI generated file is used, the command to use is
+```bash
+scripts/submit_wrapper.sh -f [path_to_test_sh_file]
+````
 
 ---
 
@@ -97,7 +101,7 @@ Compatible with **SLURM-based** job schedulers. Other environments can be added 
 * ✅ Stable benchmarking and metadata capture
 * ✅ NCCL + MPI support
 * ✅ CLI-based submission
-* 🔜 Full-featured TUI for test config generation
+* ✅ Full-featured TUI for test config generation
 * 🔜 Simplified platform setup and expansion
 
 
