@@ -30,25 +30,25 @@ endif
 $(PICO_CORE): $(PICO_CORE_OBJS)
 	@mkdir -p $(BIN_DIR)
 	@echo -e "$(GREEN)[LINK] Linking pico_core: $< -> $@$(NC)"
-	$(BINECC) $(CFLAGS) -o $@ $^ -L$(LIB_DIR) -lbine -lm
+	$(PICOCC) $(CFLAGS) -o $@ $^ -L$(LIB_DIR) -lbine -lm
 
 # Compile source files
 $(PICO_CORE_OBJ_DIR)/%.o: %.c
 	@mkdir -p $(PICO_CORE_OBJ_DIR)
 	@echo -e "$(YELLOW)[CC] Compiling $< -> $@...$(NC)"
-	$(BINECC) $(CFLAGS) -c $< -o $@
+	$(PICOCC) $(CFLAGS) -c $< -o $@
 
 -include $(PICO_CORE_DEPS)
 
 $(PICO_CORE_CUDA): $(PICO_CORE_OBJS_CUDA)
 	@mkdir -p $(BIN_DIR)
 	@echo -e "$(GREEN)[LINK] Linking pico_core_cuda: $< -> $@$(NC)"
-	$(BINECC) $(CFLAGS) -o $@ $^ -L$(LIB_DIR) -lbine_cuda -lcudart -lm
+	$(PICOCC) $(CFLAGS) -o $@ $^ -L$(LIB_DIR) -lbine_cuda -lcudart -lm
 
 $(PICO_CORE_OBJ_DIR_CUDA)/%.o: %.c
 	@mkdir -p $(PICO_CORE_OBJ_DIR_CUDA)
 	@echo -e "$(YELLOW)[CC] Compiling $< -> $@...$(NC)"
-	$(BINECC) $(CFLAGS) -DCUDA_AWARE -lcudart -c $< -o $@
+	$(PICOCC) $(CFLAGS) -DCUDA_AWARE -lcudart -c $< -o $@
 
 -include $(PICO_CORE_DEPS_CUDA)
 

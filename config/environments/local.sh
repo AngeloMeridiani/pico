@@ -1,5 +1,5 @@
 # Variables always needed
-export BINECC=mpicc
+export PICOCC=mpicc
 export RUN=mpiexec
 export RUNFLAGS="--map-by :OVERSUBSCRIBE"
 export PARTITION_GPUS_PER_NODE=1

@@ -1,5 +1,5 @@
 # General variables always needed
-export BINECC=cc
+export PICOCC=cc
 export RUN=srun
 
 # Account/partition specific variables

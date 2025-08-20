@@ -31,7 +31,7 @@ $(LIBBINE): $(LIB_OBJS)
 $(LIB_OBJ_DIR)/%.o: %.c
 	@mkdir -p $(LIB_OBJ_DIR)
 	@echo -e "$(YELLOW)[CC] Compiling $< -> $@...$(NC)"
-	$(BINECC) $(CFLAGS) -c $< -o $@
+	$(PICOCC) $(CFLAGS) -c $< -o $@
 
 -include $(LIB_DEPS)
 
@@ -46,7 +46,7 @@ $(LIBBINE_CUDA): $(LIB_OBJS_CUDA)
 $(LIB_OBJ_DIR_CUDA)/%.o: %.c
 	@mkdir -p $(LIB_OBJ_DIR_CUDA)
 	@echo -e "$(YELLOW)[CC] Compiling $< -> $@...$(NC)"
-	$(BINECC) $(CFLAGS) -DCUDA_AWARE -ldcudart -c $< -o $@
+	$(PICOCC) $(CFLAGS) -DCUDA_AWARE -ldcudart -c $< -o $@
 
 -include $(LIB_DEPS_CUDA)
 

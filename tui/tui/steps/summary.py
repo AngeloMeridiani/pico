@@ -234,10 +234,10 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         else:
             lines.append("# skipped: libraries[0].lib_type missing")
 
-        # BINECC from compiler
+        # PICOCC from compiler
         comp = first_lib.get("compiler")
         if comp:
-            write_export("BINECC", comp, quote=True)
+            write_export("PICOCC", comp, quote=True)
         else:
             lines.append("# skipped: libraries[0].compiler missing")
 
@@ -346,7 +346,7 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
                 for e in entries:
                     tags = e.get("tags", [])
                     seg.append("no" if "segmented" not in tags else "yes")
-                lines.append(f'export {coll_key.upper()}_ALGORITHMS_SEGMENTED=({" ".join(seg)})')
+                lines.append(f'export {coll_key.upper()}_ALGORITHMS_IS_SEGMENTED=({" ".join(seg)})')
 
 
     # --- Write file and chmod +x ---

@@ -474,7 +474,7 @@ source_environment() {
     source "$env_file" || { error "Failed to source environment script for '${LOCATION}'."; return 1; }
 
     local required_vars=(
-        BINECC
+        PICOCC
         RUN
         MPI_LIB
         MPI_LIB_VERSION
@@ -558,7 +558,7 @@ activate_virtualenv() {
 # Compile the codebase
 ###############################################################################
 compile_code() {
-    make_command="make all"
+    [[ "$BEAR_COMPILE" == "yes" ]] && make_command="bear -- make all" || make_command="make all" # Used to create compile_command.json file for lsp
     [[ "$DEBUG_MODE" == "yes" ]] && make_command+=" DEBUG=1" ||  make_command+=" -s"
     if [[ "$GPU_AWARENESS" == "yes" ]]; then
       case "$GPU_LIB" in

@@ -11,7 +11,6 @@ else
 fi
 
 
-[[ -z "$PICO_ACCOUNT" ]] && warning "PICO_ACCOUNT environment variable not set, please export it with your slurm project's name" && exit 0
 
 export TASKS_PER_NODE=$DEFAULT_TASKS_PER_NODE
 export COMPILE_ONLY=$DEFAULT_COMPILE_ONLY
@@ -51,6 +50,8 @@ else
     source_environment || exit 1
     validate_args || exit 1
 fi
+
+[[ -z "$PICO_ACCOUNT" && "$LOCATION" != "local" ]] && warning "PICO_ACCOUNT environment variable not set, please export it with your slurm project's name" && exit 0
 
 # 5. Load required modules
 load_modules || exit 1

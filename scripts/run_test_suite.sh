@@ -125,6 +125,7 @@ else
         _read_array "$SEG_ARR_VAR" _IS_SEGMENTED
         if (( ${#_IS_SEGMENTED[@]} == 0 )); then
             # Fallback: all "no" with same length as _ALG_NAMES
+            warning "No segmentation flags found for collective ${coll} (${SEG_ARR_VAR} is empty). Using all 'no'."
             eval "export IS_SEGMENTED=$(_build_all_no_array_literal _ALG_NAMES)"
         else
             # Export as a bash array literal, preserving values
@@ -132,7 +133,6 @@ else
             for val in "${_IS_SEGMENTED[@]}"; do seg_literal+="${val} "; done
             seg_literal="${seg_literal%% }"
             seg_literal+=")"
-            echo "Exporting IS_SEGMENTED as: $seg_literal"
             eval "export IS_SEGMENTED=${seg_literal}"
         fi
 
