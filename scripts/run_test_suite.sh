@@ -8,7 +8,7 @@ trap cleanup SIGINT
 #                           MAIN BENCHMARKING LOOP                                 #
 ####################################################################################
 # WARN: The division between tui loop and normal loop is temporary, it will be changed
-if [[ -d "$TUI_FILE" ]]; then
+if [[ ! -n "$TUI_FILE" ]]; then
     iter=0
     for config in ${TEST_CONFIG_FILES[@]//,/ }; do
         export TEST_CONFIG=${config}
