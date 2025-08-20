@@ -121,19 +121,23 @@ else
 
         # 4) IS_SEGMENTED (take from ${coll}_Algorithms_is_segmented[@] when available; else all "no")
         #    Note the exact requested name uses the *lower-case* key and mixed-case suffix.
-        SEG_ARR_VAR="${COLL_LOWER}_Algorithms_is_segmented"
-        _read_array "$SEG_ARR_VAR" _IS_SEGMENTED
-        if (( ${#_IS_SEGMENTED[@]} == 0 )); then
+        SEG_ARR_VAR="${COLL_UPPER}_ALGORITHMS_IS_SEGMENTED"
+        SEG_CSV="$(_get_var "$SEG_ARR_VAR")"
+        if [[ -z "$SEG_CSV" ]]; then
             # Fallback: all "no" with same length as _ALG_NAMES
             warning "No segmentation flags found for collective ${coll} (${SEG_ARR_VAR} is empty). Using all 'no'."
-            eval "export IS_SEGMENTED=$(_build_all_no_array_literal _ALG_NAMES)"
+            IS_SEGMENTED=()
+            for ((i=0; i<${#_ALG_NAMES[@]}; i++)); do IS_SEGMENTED+=(no); done
         else
-            # Export as a bash array literal, preserving values
-            seg_literal="("
-            for val in "${_IS_SEGMENTED[@]}"; do seg_literal+="${val} "; done
-            seg_literal="${seg_literal%% }"
-            seg_literal+=")"
-            eval "export IS_SEGMENTED=${seg_literal}"
+            IFS=',' read -r -a IS_SEGMENTED <<< "$SEG_CSV"
+            # Sanity: ensure same length as algorithms (pad/trim and warn)
+            if (( ${#IS_SEGMENTED[@]} < ${#_ALG_NAMES[@]} )); then
+                warning "IS_SEGMENTED shorter than algorithms for ${coll}; padding with 'no'."
+                for ((i=${#IS_SEGMENTED[@]}; i<${#_ALG_NAMES[@]}; i++)); do IS_SEGMENTED+=(no); done
+            elif (( ${#IS_SEGMENTED[@]} > ${#_ALG_NAMES[@]} )); then
+                warning "IS_SEGMENTED longer than algorithms for ${coll}; trimming extras."
+                IS_SEGMENTED=( "${IS_SEGMENTED[@]:0:${#_ALG_NAMES[@]}}" )
+            fi
         fi
 
         # Now --gpu-per-node is analyzed. It is a comma separated list of GPUs per node.
