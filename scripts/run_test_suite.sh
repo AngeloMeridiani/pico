@@ -140,7 +140,16 @@ else
             fi
         fi
 
-        # 5) if MPI_LIB is CRAY_MPICH or MPICH create a CVAR
+        # 5) if MPI_LIB is CRAY_MPICH or MPICH create a CVARS=(auto nb recursive_doubling reduce_scatter_allgather auto auto auto auto auto auto) taken from
+        # ${COLL_UPPER}_ALGORITHMS_CVARS
+        CVARS_VAR="${COLL_UPPER}_ALGORITHMS_CVARS"
+        CVARS_CSV="$(_get_var "$CVARS_VAR")"
+        if [[ -z "$CVARS_CSV" ]]; then
+            error "No CVARS found for collective ${coll} (${CVARS_VAR} is empty)."
+            exit 1
+        else
+            IFS=',' read -r -a CVARS <<< "$CVARS_CSV"
+        fi
 
         # Now --gpu-per-node is analyzed. It is a comma separated list of GPUs per node.
         # We need to iterate through it and set the GPU_AWARENESS variable accordingly.

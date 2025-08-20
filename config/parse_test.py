@@ -206,7 +206,7 @@ def export_environment_variables(matching_algorithms, skip_algorithms, is_segmen
             f.write(f"export COLLECTIVE_TYPE='{collective}'\n")
             f.write(f"export ALGOS='{algo_names}'\n")
             f.write(f"export SKIP='{skip_names}'\n")
-            f.write(f"export LIBbine_VERSION='{libbine_version}'\n")
+            f.write(f"export LIBBINE_VERSION='{libbine_version}'\n")
             f.write(f"export MPI_OP='{mpi_op}'\n")
             f.write(f"export IS_SEGMENTED=({segmented})\n")
             if cvars_str:
