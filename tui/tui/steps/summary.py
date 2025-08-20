@@ -345,7 +345,7 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
                 seg: List[str] = []
                 for e in entries:
                     tags = e.get("tags", [])
-                    seg.append("no" if "segmented" not in tags else "yes")
+                    seg.append("no" if "is_segmented" not in tags else "yes")
                 lines.append(f'export {coll_key.upper()}_ALGORITHMS_IS_SEGMENTED="{",".join(seg)}"')
 
 
