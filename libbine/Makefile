@@ -1,19 +1,18 @@
 CFLAGS = $(CFLAGS_COMMON)
 
-LIB_DIR = ../lib
-LIB_SRC = $(wildcard *.c)
+LIB_DIR        ?= ../lib
+LIB_SRC        := $(wildcard *.c)
 
-LIB_OBJ_DIR = ../obj/lib
-LIB_OBJS = $(patsubst %.c, $(LIB_OBJ_DIR)/%.o, $(LIB_SRC))
-LIB_DEPS = $(patsubst %.c, $(LIB_OBJ_DIR)/%.d, $(LIB_SRC))
-LIBBINE = $(LIB_DIR)/libbine.a
+LIB_OBJ_DIR    ?= ../obj/lib
+LIB_OBJS       := $(patsubst %.c, $(LIB_OBJ_DIR)/%.o, $(LIB_SRC))
+LIB_DEPS       := $(patsubst %.c, $(LIB_OBJ_DIR)/%.d, $(LIB_SRC))
+LIBBINE        := $(LIB_DIR)/libbine.a
 
-LIB_OBJ_DIR_CUDA = ../obj/lib_cuda
-LIB_OBJS_CUDA = $(patsubst %.c, $(LIB_OBJ_DIR_CUDA)/%.o, $(LIB_SRC))
-LIB_DEPS_CUDA = $(patsubst %.c, $(LIB_OBJ_DIR_CUDA)/%.d, $(LIB_SRC))
-LIBBINE_CUDA = $(LIB_DIR)/libbine_cuda.a
+LIB_OBJ_DIR_CUDA ?= ../obj/lib_cuda
+LIB_OBJS_CUDA    := $(patsubst %.c, $(LIB_OBJ_DIR_CUDA)/%.o, $(LIB_SRC))
+LIB_DEPS_CUDA    := $(patsubst %.c, $(LIB_OBJ_DIR_CUDA)/%.d, $(LIB_SRC))
+LIBBINE_CUDA     := $(LIB_DIR)/libbine_cuda.a
 
-# Default target
 ifeq ($(CUDA_AWARE),1)
 all: $(LIBBINE) $(LIBBINE_CUDA)
 else

@@ -54,7 +54,13 @@ fi
 [[ -z "$PICO_ACCOUNT" && "$LOCATION" != "local" ]] && warning "PICO_ACCOUNT environment variable not set, please export it with your slurm project's name" && exit 0
 
 # 5. Load required modules
-load_modules || exit 1
+# TUI: only load general modules here; per-library modules are loaded during compilation
+# CLI: load all modules here
+if [[ -n "$TUI_FILE" ]]; then
+    load_modules "$GENERAL_MODULES" || exit 1
+else
+    load_modules || exit 1
+fi
 
 # 6. Activate the virtual environment, install Python packages if not presents
 if [[ "$COMPILE_ONLY" == "no" ]]; then
@@ -63,7 +69,11 @@ if [[ "$COMPILE_ONLY" == "no" ]]; then
 fi
 
 # 7. Compile code. If `$DEBUG_MODE` is `yes`, debug flags will be added
-compile_code || exit 1
+if [[ -n "$TUI_FILE" ]]; then
+    compile_all_libraries_tui || exit 1
+else
+    compile_code || exit 1
+fi
 [[ "$COMPILE_ONLY" == "yes" ]] && success "Compile only mode. Exiting..." && exit 0
 
 # 8. Defines env dependant variables
@@ -86,6 +96,51 @@ fi
 if [[ "$LOCATION" == "local" ]]; then
     scripts/run_test_suite.sh
 else
+    if [[ -n "$TUI_FILE" ]]; then
+        MAX_TASKS_PER_NODE=""
+        MAX_GPU_PER_NODE=""
+        ANY_GPU_AWARE="no"
+
+        if [[ "${LIB_COUNT:-0}" =~ ^[0-9]+$ ]] && (( LIB_COUNT > 0 )); then
+            for (( i=0; i<LIB_COUNT; i++ )); do
+                # CPU tasks
+                tpn_var="LIB_${i}_TASKS_PER_NODE"
+                tpn_csv="$(_get_var "$tpn_var")"
+                if [[ -n "$tpn_csv" ]]; then
+                    for t in ${tpn_csv//,/ }; do
+                        [[ "$t" =~ ^[0-9]+$ ]] || continue
+                        if [[ -z "$MAX_TASKS_PER_NODE" || "$t" -gt "$MAX_TASKS_PER_NODE" ]]; then
+                            MAX_TASKS_PER_NODE="$t"
+                        fi
+                    done
+                fi
+
+                # GPU tasks
+                gpn_var="LIB_${i}_GPU_PER_NODE"
+                gpn_csv="$(_get_var "$gpn_var")"
+                gaw_var="LIB_${i}_GPU_AWARENESS"
+                gaw_val="$(_get_var "$gaw_var")"
+                if [[ "$gaw_val" == "yes" && -n "$gpn_csv" ]]; then
+                    ANY_GPU_AWARE="yes"
+                    for g in ${gpn_csv//,/ }; do
+                        [[ "$g" =~ ^[0-9]+$ ]] || continue
+                        if [[ -z "$MAX_GPU_PER_NODE" || "$g" -gt "$MAX_GPU_PER_NODE" ]]; then
+                            MAX_GPU_PER_NODE="$g"
+                        fi
+                        # also consider GPU TPN for the global cap (1:1 CPU:GPU mapping)
+                        if [[ -z "$MAX_TASKS_PER_NODE" || "$g" -gt "$MAX_TASKS_PER_NODE" ]]; then
+                            MAX_TASKS_PER_NODE="$g"
+                        fi
+                    done
+                fi
+            done
+        fi
+
+        # Expose for later consumers / compatibility
+        [[ -n "$MAX_GPU_PER_NODE" ]] && export MAX_GPU_TEST="$MAX_GPU_PER_NODE"
+        [[ -n "$MAX_TASKS_PER_NODE" ]] && export SLURM_TASKS_PER_NODE="$MAX_TASKS_PER_NODE"
+    fi
+
     SLURM_PARAMS=" --account $PICO_ACCOUNT --nodes $N_NODES --time $TEST_TIME --partition $PARTITION"
 
     if [[ -n "$QOS" ]]; then
@@ -94,24 +149,30 @@ else
         [[ -n "$QOS_GRES" ]] && GRES="$QOS_GRES"
     fi
 
-    if [[ "$GPU_AWARENESS" == "yes" ]]; then
-        [[ -z "$GRES" ]] && GRES="gpu:$MAX_GPU_TEST"
-        SLURM_PARAMS+=" --gpus-per-node $MAX_GPU_TEST"
+    if [[ "${ANY_GPU_AWARE:-$GPU_AWARENESS}" == "yes" ]]; then
+        if [[ -n "$MAX_GPU_PER_NODE" ]]; then
+            [[ -z "$GRES" ]] && GRES="gpu:$MAX_GPU_PER_NODE"
+            SLURM_PARAMS+=" --gpus-per-node $MAX_GPU_PER_NODE"
+        elif [[ -n "$MAX_GPU_TEST" ]]; then
+            [[ -z "$GRES" ]] && GRES="gpu:$MAX_GPU_TEST"
+            SLURM_PARAMS+=" --gpus-per-node $MAX_GPU_TEST"
+        fi
     fi
 
-    if [[ "$LOCATION" != "leonardo" || -n "$SLURM_TASKS_PER_NODE" ]]; then # leonardo removed the possiblility to ask for exclusive nodes if using ntasks-per-node parameter
+    if [[ "$LOCATION" != "leonardo" || -n "$SLURM_TASKS_PER_NODE" ]]; then
         if [[ -n "$FORCE_TASKS" && -z "$QOS_TASKS_PER_NODE" ]]; then
             SLURM_PARAMS+=" --ntasks $FORCE_TASKS"
         else
-            T_PER_NODE="${SLURM_TASKS_PER_NODE:-$TASKS_PER_NODE}"
-            SLURM_PARAMS+=" --ntasks-per-node $T_PER_NODE"
+            if [[ -n "$SLURM_TASKS_PER_NODE" ]]; then
+                SLURM_PARAMS+=" --ntasks-per-node $SLURM_TASKS_PER_NODE"
+            fi
         fi
     fi
+
     [[ -n "$GRES" ]] && SLURM_PARAMS+=" --gres=$GRES"
-    [[ -n "$EXCLUDE_NODES" ]] && SLURM_PARAMS+=" --exclude $EXCLUDE_NODES" 
+    [[ -n "$EXCLUDE_NODES" ]] && SLURM_PARAMS+=" --exclude $EXCLUDE_NODES"
     [[ -n "$JOB_DEP" ]] && SLURM_PARAMS+=" --dependency=afterany:$JOB_DEP"
     [[ -n "$OTHER_SLURM_PARAMS" ]] && SLURM_PARAMS+=" $OTHER_SLURM_PARAMS"
-
 
     if [[ "$INTERACTIVE" == "yes" ]]; then
         export SLURM_PARAMS="$SLURM_PARAMS"

@@ -1,20 +1,19 @@
 # Compiler and flags
 CFLAGS = $(CFLAGS_COMMON)
 
-# Directories
-BIN_DIR = ../bin
-PICO_CORE_SRC = $(wildcard *.c)
+BIN_DIR            ?= ../bin
+PICO_CORE_SRC      := $(wildcard *.c)
 
-PICO_CORE_OBJ_DIR = ../obj/pico_core
-PICO_CORE_OBJS = $(patsubst %.c, $(PICO_CORE_OBJ_DIR)/%.o, $(PICO_CORE_SRC))
-PICO_CORE_DEPS = $(patsubst %.c, $(PICO_CORE_OBJ_DIR)/%.d, $(PICO_CORE_SRC))
-LIB_DIR = ../lib
-PICO_CORE = $(BIN_DIR)/pico_core
+PICO_CORE_OBJ_DIR       ?= ../obj/pico_core
+PICO_CORE_OBJS          := $(patsubst %.c, $(PICO_CORE_OBJ_DIR)/%.o, $(PICO_CORE_SRC))
+PICO_CORE_DEPS          := $(patsubst %.c, $(PICO_CORE_OBJ_DIR)/%.d, $(PICO_CORE_SRC))
+LIB_DIR                 ?= ../lib
+PICO_CORE               := $(BIN_DIR)/pico_core
 
-PICO_CORE_OBJ_DIR_CUDA = ../obj/pico_core_cuda
-PICO_CORE_OBJS_CUDA = $(patsubst %.c, $(PICO_CORE_OBJ_DIR_CUDA)/%.o, $(PICO_CORE_SRC))
-PICO_CORE_DEPS_CUDA = $(patsubst %.c, $(PICO_CORE_OBJ_DIR_CUDA)/%.d, $(PICO_CORE_SRC))
-PICO_CORE_CUDA = $(BIN_DIR)/pico_core_cuda
+PICO_CORE_OBJ_DIR_CUDA  ?= ../obj/pico_core_cuda
+PICO_CORE_OBJS_CUDA     := $(patsubst %.c, $(PICO_CORE_OBJ_DIR_CUDA)/%.o, $(PICO_CORE_SRC))
+PICO_CORE_DEPS_CUDA     := $(patsubst %.c, $(PICO_CORE_OBJ_DIR_CUDA)/%.d, $(PICO_CORE_SRC))
+PICO_CORE_CUDA          := $(BIN_DIR)/pico_core_cuda
 
 ifeq ($(DEBUG),1)
 	CFLAGS := $(filter-out -O%,$(CFLAGS))
@@ -52,8 +51,6 @@ $(PICO_CORE_OBJ_DIR_CUDA)/%.o: %.c
 
 -include $(PICO_CORE_DEPS_CUDA)
 
-
 clean:
 	@echo -e "[CLEAN] Removing pico_core object files and binary..."
 	@rm -rf $(PICO_CORE_OBJ_DIR) $(PICO_CORE) $(PICO_CORE_OBJ_DIR_CUDA) $(PICO_CORE_CUDA)
-

@@ -507,19 +507,36 @@ source_environment() {
 }
 
 ###############################################################################
-# Load required modules
+# Load and unload required modules
 ###############################################################################
 load_modules(){
-    if [ -n "$MODULES" ]; then
-        inform "Loading modules: $MODULES"
-        for module in ${MODULES//,/ }; do
-            module load $module || { error "Failed to load module $module." ; return 1; }
+    local csv="${1:-$MODULES}"
+    if [ -n "$csv" ]; then
+        inform "Loading modules: $csv"
+        for module in ${csv//,/ }; do
+            module load "$module" || { error "Failed to load module $module." ; return 1; }
         done
         success "Modules successfully loaded."
     fi
-
     return 0
 }
+export -f load_modules
+
+
+unload_modules(){
+    local csv="$1"
+    [ -z "$csv" ] && return 0
+    inform "Unloading modules: $csv"
+    # reverse order to be safe
+    local arr=()
+    for m in ${csv//,/ }; do arr+=("$m"); done
+    for (( idx=${#arr[@]}-1 ; idx>=0 ; idx-- )); do
+        module unload "${arr[$idx]}" >/dev/null 2>&1 || true
+    done
+    success "Modules successfully unloaded."
+    return 0
+}
+export -f unload_modules
 
 ###############################################################################
 # Activate virtual environment and install required packages
@@ -589,6 +606,92 @@ compile_code() {
     success "Compilation succeeded."
     return 0
 }
+
+compile_all_libraries_tui() {
+    # Keep GENERAL_MODULES resident
+    load_modules "$GENERAL_MODULES" || return 1
+
+    local count="${LIB_COUNT:-0}"
+    if ! [[ "$count" =~ ^[0-9]+$ ]] || (( count == 0 )); then
+        warning "LIB_COUNT is zero or unset; nothing to compile"
+        return 0
+    fi
+
+    # DEBUG flag for make
+    local mk_debug=0
+    [[ "$DEBUG_MODE" == "yes" ]] && mk_debug=1
+
+    for (( i=0; i<count; i++ )); do
+        local libmods_var="LIB_${i}_MODULES"
+        local libmods="$(_get_var "$libmods_var")"
+
+        # Per-lib toolchain / identities
+        export PICOCC="$(_get_var "LIB_${i}_PICOCC")"
+        export MPI_LIB="$(_get_var "LIB_${i}_MPI_LIB")"
+        export MPI_LIB_VERSION="$(_get_var "LIB_${i}_MPI_LIB_VERSION")"
+
+        # --- GPU build decision (CUDA-only for now) ---
+        local gaw="$(_get_var "LIB_${i}_GPU_AWARENESS")"
+        local gpn="$(_get_var "LIB_${i}_GPU_PER_NODE")"
+        local gpu_lib_raw="$(_get_var "LIB_${i}_GPU_LIB")"
+        local gpu_lib="${gpu_lib_raw,,}"   # lowercase
+
+        local any_gpu_nonzero=0
+        if [[ -n "$gpn" ]]; then
+            for n in ${gpn//,/ }; do
+                if [[ "$n" =~ ^[0-9]+$ ]] && (( n > 0 )); then any_gpu_nonzero=1; break; fi
+            done
+        fi
+
+        # Build the GPU exec ONLY if: awareness=yes AND any nonzero GPUs AND GPU_LIB == "cuda"
+        local need_cuda_build=0
+        if [[ "$gaw" == "yes" && $any_gpu_nonzero -eq 1 && "$gpu_lib" == "cuda" ]]; then
+            need_cuda_build=1
+        fi
+
+        # Load only the library modules (GENERAL already loaded)
+        [ -n "$libmods" ] && load_modules "$libmods" || true
+
+        # Per-lib output dirs (+ stamps)
+        local OUT_BIN="$BINE_DIR/bin/lib_${i}"
+        local OUT_LIB="$BINE_DIR/lib/lib_${i}"
+        local OUT_OBJ="$BINE_DIR/obj/lib_${i}"
+        local OUT_STAMP_DIR="$BINE_DIR/obj/stamps_lib_${i}"
+        mkdir -p "$OUT_BIN" "$OUT_LIB" "$OUT_OBJ" "$OUT_STAMP_DIR" || true
+
+        # One make call:
+        #   - if need_cuda_build=1 -> CUDA_AWARE=1 (Makefiles build BOTH pico_core & pico_core_cuda)
+        #   - else -> CPU-only
+        local mk="make -C \"$BINE_DIR\" all"
+        mk+=" STAMP_DIR=\"$OUT_STAMP_DIR\""
+        mk+=" BIN_DIR=\"$OUT_BIN\" LIB_DIR=\"$OUT_LIB\""
+        mk+=" PICO_CORE_OBJ_DIR=\"$OUT_OBJ/pico_core\" PICO_CORE_OBJ_DIR_CUDA=\"$OUT_OBJ/pico_core_cuda\""
+        mk+=" LIB_OBJ_DIR=\"$OUT_OBJ/lib\" LIB_OBJ_DIR_CUDA=\"$OUT_OBJ/lib_cuda\""
+        mk+=" DEBUG=$mk_debug"
+        if (( need_cuda_build )); then mk+=" CUDA_AWARE=1"; fi
+
+        if [[ "$DRY_RUN" == "yes" ]]; then
+            inform "Would run: PICOCC=\"$PICOCC\" MPI_LIB=\"$MPI_LIB\" $mk"
+        else
+            PICOCC="$PICOCC" MPI_LIB="$MPI_LIB" eval "$mk" || { error "Compilation failed for library $i"; return 1; }
+        fi
+
+        # Export the per-lib execs that exist
+        if [ -f "$OUT_BIN/pico_core" ]; then
+            export "LIB_${i}_PICO_EXEC_CPU=$OUT_BIN/pico_core"
+        fi
+        if [ -f "$OUT_BIN/pico_core_cuda" ]; then
+            export "LIB_${i}_PICO_EXEC_GPU=$OUT_BIN/pico_core_cuda"
+        fi
+
+        # Unload only the per-lib modules (keep GENERAL loaded)
+        [ -n "$libmods" ] && unload_modules "$libmods" || true
+    done
+
+    success "Per-library compilation completed."
+    return 0
+}
+export -f compile_all_libraries_tui
 
 ###############################################################################
 # Sanity checks

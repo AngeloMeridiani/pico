@@ -35,7 +35,7 @@
     "dry_run": false,
     "compress": true,
     "delete": true,
-    "number_of_nodes": 4,
+    "number_of_nodes": 2,
     "output_level": "statistics",
     "dimensions": {
       "dtype": "int32",
@@ -97,6 +97,16 @@
       "algorithms": {
         "allreduce": [
           {
+            "name": "default_ompi",
+            "coll": "allreduce",
+            "desc": "Open MPI default algorithm selection",
+            "version": "4.1.5",
+            "selection": 0,
+            "tags": [
+              "default"
+            ]
+          },
+          {
             "name": "linear_ompi",
             "coll": "allreduce",
             "desc": "Open MPI linear algorithm from 'basic' module, consists in a Reduce to rank 0 followed by a Bcast. Both Reduce and Bcast are the one from the 'basic' module.",
@@ -104,17 +114,6 @@
             "selection": 1,
             "tags": [
               "linear",
-              "can_crash"
-            ]
-          },
-          {
-            "name": "non_overlapping_ompi",
-            "coll": "allreduce",
-            "desc": "Open MPI non-overlapping algorithm, consists in a Reduce to rank 0 followed by a Bcast. Utilizes default Reduce and Bcast algorithm selection.",
-            "version": "4.1.5",
-            "selection": 2,
-            "tags": [
-              "non_overlapping",
               "can_crash"
             ]
           }

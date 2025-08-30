@@ -20,23 +20,11 @@ from typing import Any, Dict, Iterable, List, Tuple, Union
 JsonLike = Union[Dict[str, Any], str, Path]
 
 
-# TODO: Temporary, thanks GPT :)
+# WARN: This function needs to be rewritten completely, this is just a quick working prototype
 def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
     """
     Parse the given JSON config (dict or file path) and write a shell script that exports variables
     per the agreed specification. Returns the output .sh path as a string.
-
-    Key points:
-    - Shebang included; no header block (only # skipped: comments when something's missing).
-    - Strings => double-quoted; numbers => unquoted; booleans => "yes"/"no".
-    - environment.other_var: numeric values unquoted; string values double-quoted.
-    - MODULES is a single consolidated line ordered as: lib_load (if any), gpu_load (if GPU awareness is yes), python_module.
-    - GPU awareness = "yes" iff any non-zero value exists in libraries[0].tests.gpu.
-      Only then export GPU_LIB/GPU_LIB_VERSION and include the GPU module.
-    - QOS exported only if qos.is_required is true.
-    - TASKS_PER_NODE omitted if empty/missing; GPU_PER_NODE is "0" if empty/missing; GPU_AWARENESS "yes"/"no".
-    - Collectives: export COLLECTIVES and, per collective, *_ALGORITHMS and *_ALGORITHMS_SKIP (yes if any constraint has key == "count").
-    - UTF-8 I/O; overwrite output; mark executable.
     """
     # --- Load JSON ---
     data: Dict[str, Any]
@@ -60,7 +48,6 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         return False
 
     def bash_escape_double_quoted(s: str) -> str:
-        # Escape backslash, dollar, and double quote to be safe inside "..."
         return s.replace("\\", "\\\\").replace("$", "\\$").replace('"', '\\"')
 
     def dq(s: str) -> str:
@@ -70,7 +57,6 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         return "yes" if bool(b) else "no"
 
     def csv(values: Iterable[Any]) -> str:
-        # Join without spaces
         return ",".join(str(v) for v in values)
 
     def write_export(name: str, value: Any, *, quote: bool) -> None:
@@ -87,26 +73,19 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
             return "CRAY_MPICH"
         if "mpich" in lt and "cray" not in lt:
             return "MPICH"
-        # Generic fallback: uppercase and normalize separators
-        tag = re.sub(r"[^A-Za-z0-9]+", "_", lib_type).upper().strip("_")
-        return tag
+        # Fallback: uppercase and normalize separators
+        return re.sub(r"[^A-Za-z0-9]+", "_", lib_type).upper().strip("_")
 
     def parse_module_name_version(mod: str) -> Tuple[str, str]:
-        # Expect "<name>/<version>" or just "<name>"
         parts = str(mod).split("/", 1)
         name = parts[0]
         version = parts[1] if len(parts) > 1 else ""
         return name, version
 
-    # --- Begin script (shebang only) ---
+    # --- Begin script ---
     lines.append("#!/bin/bash")
 
-    # We'll assemble MODULES parts then write one consolidated export later
-    python_module: str | None = None
-    lib_module: str | None = None
-    gpu_module: str | None = None  # only filled when GPU awareness is yes
-
-    # ========== environment ==========
+    # ================= environment =================
     env = data.get("environment")
     if not isinstance(env, dict):
         lines.append("# skipped: environment section not found")
@@ -120,13 +99,6 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         # RUN
         write_export("RUN", "srun" if env.get("slurm") else "mpirun", quote=False)
 
-        # python_module (tail of MODULES)
-        py_mod = env.get("python_module")
-        if py_mod:
-            python_module = str(py_mod)
-        else:
-            lines.append("# skipped: environment.python_module missing (MODULES may be partial)")
-
         # other_var (export all key-value pairs)
         other_var = env.get("other_var")
         if isinstance(other_var, dict):
@@ -136,7 +108,7 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
                 else:
                     write_export(str(k), v, quote=True)
 
-        # PARTITION and optional QOS
+        # PARTITION and optional QOS (+ extras)
         part = env.get("partition")
         if isinstance(part, dict):
             if "name" in part:
@@ -161,7 +133,16 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         else:
             lines.append("# skipped: environment.partition missing")
 
-    # ========== test ==========
+        # ------- GENERAL_MODULES (env-level only, not from libraries) -------
+        general_modules: List[str] = []
+        py_mod = env.get("python_module")
+        if py_mod:
+            general_modules.append(str(py_mod))
+        # (If you later add more env-level modules under environment, add them here)
+        if general_modules:
+            write_export("GENERAL_MODULES", csv(general_modules), quote=True)
+
+    # ================= test =================
     test = data.get("test")
     if not isinstance(test, dict):
         lines.append("# skipped: test section not found")
@@ -200,170 +181,160 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         if not isinstance(dims, dict):
             lines.append("# skipped: test.dimensions missing")
         else:
-            # TYPES
             if "dtype" in dims:
                 write_export("TYPES", dims["dtype"], quote=True)
             else:
                 lines.append("# skipped: test.dimensions.dtype missing")
 
-            # SIZES from sizes_elements (CSV as string)
             if "sizes_elements" in dims and isinstance(dims["sizes_elements"], list):
-                sizes_csv = csv(dims["sizes_elements"])
-                write_export("SIZES", sizes_csv, quote=True)
+                write_export("SIZES", csv(dims["sizes_elements"]), quote=True)
             else:
                 lines.append("# skipped: test.dimensions.sizes_elements missing or not a list")
 
-            # SEGMENT_SIZES from segsizes_bytes (CSV as string)
             if "segsizes_bytes" in dims and isinstance(dims["segsizes_bytes"], list):
-                segs_csv = csv(dims["segsizes_bytes"])
-                write_export("SEGMENT_SIZES", segs_csv, quote=True)
+                write_export("SEGMENT_SIZES", csv(dims["segsizes_bytes"]), quote=True)
             else:
                 lines.append("# skipped: test.dimensions.segsizes_bytes missing or not a list")
 
-    # ========== libraries (assume first) ==========
+    # ================= libraries (0-based, per-library) =================
     libs = data.get("libraries")
-    first_lib = libs[0] if isinstance(libs, list) and libs else None
-    gpu_awareness_yes = False
-    lib_type = ''
-    if not isinstance(first_lib, dict):
-        lines.append("# skipped: libraries[0] not found")
+    if not isinstance(libs, list) or len(libs) == 0:
+        write_export("LIB_COUNT", 0, quote=False)
+        lines.append("# skipped: libraries not found or empty")
     else:
-        # MPI_LIB from lib_type
-        lib_type = first_lib.get("lib_type")
-        if lib_type:
-            write_export("MPI_LIB", mpi_lib_tag(str(lib_type)), quote=True)
-        else:
-            lines.append("# skipped: libraries[0].lib_type missing")
+        write_export("LIB_COUNT", len(libs), quote=False)
 
-        # PICOCC from compiler
-        comp = first_lib.get("compiler")
-        if comp:
-            write_export("PICOCC", comp, quote=True)
-        else:
-            lines.append("# skipped: libraries[0].compiler missing")
+        for i, lib in enumerate(libs):
+            prefix = f"LIB_{i}_"
 
-        # MPI_LIB_VERSION
-        ver = first_lib.get("version")
-        if ver:
-            write_export("MPI_LIB_VERSION", ver, quote=True)
-        else:
-            lines.append("# skipped: libraries[0].version missing")
+            if not isinstance(lib, dict):
+                lines.append(f"# skipped: libraries[{i}] not a dict")
+                continue
 
-        # TASKS_PER_NODE from tests.cpu
-        tests_lib = first_lib.get("tests", {})
-        cpu_list = tests_lib.get("cpu")
-        if isinstance(cpu_list, list) and len(cpu_list) > 0:
-            write_export("TASKS_PER_NODE", csv(cpu_list), quote=True)
-        elif cpu_list is None:
-            lines.append("# skipped: libraries[0].tests.cpu missing (TASKS_PER_NODE not exported)")
-        else:
-            lines.append("# skipped: libraries[0].tests.cpu empty (TASKS_PER_NODE not exported)")
+            # Identity & basics
+            name = lib.get("name")
+            if name: write_export(prefix + "NAME", name, quote=True)
 
-        # GPU_PER_NODE from tests.gpu (default "0" if empty/missing)
-        gpu_list = tests_lib.get("gpu")
-        if isinstance(gpu_list, list) and len(gpu_list) > 0:
-            gpu_per_node_csv = csv(gpu_list)
-            write_export("GPU_PER_NODE", gpu_per_node_csv, quote=True)
-            # GPU awareness = yes if any non-zero value exists
-            gpu_awareness_yes = any(int(v) != 0 for v in gpu_list if is_number_like(v))
-            write_export("GPU_AWARENESS", "yes" if gpu_awareness_yes else "no", quote=True)
+            version = lib.get("version")
+            if version: write_export(prefix + "VERSION", version, quote=True)
 
-        # lib_load module candidate
-        lib_load = first_lib.get("lib_load")
-        if isinstance(lib_load, dict) and lib_load.get("type") == "module" and lib_load.get("module"):
-            lib_module = str(lib_load["module"])
+            standard = lib.get("standard")
+            if standard: write_export(prefix + "STANDARD", standard, quote=True)
 
-        # GPU module & GPU_LIB vars only when awareness is yes
-        if gpu_awareness_yes:
-            gpu_support = first_lib.get("gpu_support", {})
-            gpu_load = gpu_support.get("gpu_load", {}) if isinstance(gpu_support, dict) else {}
-            if isinstance(gpu_load, dict) and gpu_load.get("type") == "module" and gpu_load.get("module"):
-                mod = str(gpu_load["module"])
-                name, version = parse_module_name_version(mod)
-                write_export("GPU_LIB", name, quote=True)
-                if version:
-                    write_export("GPU_LIB_VERSION", version, quote=True)
-                gpu_module = mod
+            lib_type = lib.get("lib_type")
+            if lib_type:
+                write_export(prefix + "LIB_TYPE", lib_type, quote=True)
+                write_export(prefix + "MPI_LIB", mpi_lib_tag(str(lib_type)), quote=True)
+
+            # Compiler / MPI lib version
+            comp = lib.get("compiler")
+            if comp: write_export(prefix + "PICOCC", comp, quote=True)
+
+            if version:
+                write_export(prefix + "MPI_LIB_VERSION", version, quote=True)
+
+            # Per-library tests: tasks / gpu
+            tests_lib = lib.get("tests", {})
+            cpu_list = tests_lib.get("cpu") if isinstance(tests_lib, dict) else None
+            if isinstance(cpu_list, list) and len(cpu_list) > 0:
+                write_export(prefix + "TASKS_PER_NODE", csv(cpu_list), quote=True)
+            # else: omit if missing/empty
+
+            gpu_list = tests_lib.get("gpu") if isinstance(tests_lib, dict) else None
+            gpu_awareness_yes = False
+            if isinstance(gpu_list, list) and len(gpu_list) > 0:
+                write_export(prefix + "GPU_PER_NODE", csv(gpu_list), quote=True)
+                # Awareness only if any non-zero
+                gpu_awareness_yes = any(is_number_like(v) and int(v) != 0 for v in gpu_list)
+                if gpu_awareness_yes:
+                    write_export(prefix + "GPU_AWARENESS", "yes", quote=True)
+                # else: omit GPU_AWARENESS when empty or all zeroes
+            # else: omit GPU_PER_NODE
+
+            # Per-library modules: lib_load + (gpu module only when awareness yes)
+            lib_modules: List[str] = []
+            lib_load = lib.get("lib_load")
+            if isinstance(lib_load, dict) and lib_load.get("type") == "module" and lib_load.get("module"):
+                lib_modules.append(str(lib_load["module"]))
+
+            if gpu_awareness_yes:
+                gpu_support = lib.get("gpu_support", {})
+                gpu_load = gpu_support.get("gpu_load", {}) if isinstance(gpu_support, dict) else {}
+                if isinstance(gpu_load, dict) and gpu_load.get("type") == "module" and gpu_load.get("module"):
+                    mod = str(gpu_load["module"])
+                    name_m, ver_m = parse_module_name_version(mod)
+                    write_export(prefix + "GPU_LIB", name_m, quote=True)
+                    if ver_m:
+                        write_export(prefix + "GPU_LIB_VERSION", ver_m, quote=True)
+                    lib_modules.append(mod)
+                else:
+                    lines.append(f"# skipped: libraries[{i}].gpu_support.gpu_load module unavailable for GPU-aware lib")
+
+            if lib_modules:
+                write_export(prefix + "MODULES", csv(lib_modules), quote=True)
+
+            # Algorithms / Collectives (per library)
+            algos = lib.get("algorithms")
+            if not isinstance(algos, dict):
+                lines.append(f"# skipped: libraries[{i}].algorithms missing")
             else:
-                lines.append("# skipped: gpu module load not available (GPU_LIB/GPU_LIB_VERSION not exported)")
+                coll_keys = list(algos.keys())
+                if coll_keys:
+                    write_export(prefix + "COLLECTIVES", csv(coll_keys), quote=True)
+                else:
+                    lines.append(f"# skipped: libraries[{i}].algorithms empty")
 
-    # After we've gathered modules, build final ordered MODULES:
-    # order = [lib_module (if any), gpu_module (iff awareness yes), python_module (if any)]
-    modules_ordered: List[str] = []
-    if lib_module:
-        modules_ordered.append(lib_module)
-    if gpu_module:
-        modules_ordered.append(gpu_module)
-    if python_module:
-        modules_ordered.append(python_module)
+                # MPICH-family detection for CVARS
+                is_mpich_family = bool(lib_type and "mpich" in str(lib_type).lower())
 
-    if modules_ordered:
-        write_export("MODULES", csv(modules_ordered), quote=True)
-    else:
-        lines.append("# skipped: MODULES not written (no modules determined)")
+                for coll_key in coll_keys:
+                    entries = algos.get(coll_key)
+                    if not isinstance(entries, list) or not entries:
+                        lines.append(f"# skipped: libraries[{i}].algorithms.{coll_key} empty")
+                        continue
 
-    # ========== collectives & algorithms ==========
-    if isinstance(first_lib, dict):
-        algos = first_lib.get("algorithms")
-        if not isinstance(algos, dict):
-            lines.append("# skipped: libraries[0].algorithms missing")
-        else:
-            # preserve original key order
-            collective_keys = list(algos.keys())
-            if collective_keys:
-                write_export("COLLECTIVES", csv(collective_keys), quote=True)
-            else:
-                lines.append("# skipped: algorithms empty (COLLECTIVES not exported)")
+                    # names
+                    names = [str(e.get("name", "")) for e in entries]
+                    write_export(prefix + f"{coll_key.upper()}_ALGORITHMS", csv(names), quote=True)
 
-            for coll_key in collective_keys:
-                entries = algos.get(coll_key)
-                if not isinstance(entries, list) or not entries:
-                    lines.append(f"# skipped: algorithms.{coll_key} empty")
-                    continue
-
-                # names (CSV)
-                names = [str(e.get("name", "")) for e in entries]
-                write_export(f"{coll_key.upper()}_ALGORITHMS", csv(names), quote=True)
-
-                # skip flags (yes if any constraint has key == "count")
-                skips: List[str] = []
-                for e in entries:
-                    cons = e.get("constraints", [])
-                    has_count = False
-                    if isinstance(cons, list):
-                        for c in cons:
-                            if isinstance(c, dict) and c.get("key") == "count":
-                                has_count = True
-                                break
-                    if has_count:
-                        skips.append(str(e.get("name", "")))
-                lines.append(f'export {coll_key.upper()}_ALGORITHMS_SKIP="{",".join(skips)}"')
-
-                # is segmented flags (yes if any constraint has segmented in tags
-                seg: List[str] = []
-                for e in entries:
-                    tags = e.get("tags", [])
-                    seg.append("no" if "is_segmented" not in tags else "yes")
-                lines.append(f'export {coll_key.upper()}_ALGORITHMS_IS_SEGMENTED="{",".join(seg)}"')
-
-                if lib_type and "mpich" in lib_type.lower():
-                    cvar: List[str] = []
+                    # skip (names with a 'count' constraint)
+                    skip_names: List[str] = []
                     for e in entries:
-                        var = e.get("selection", "auto")
-                        cvar.append(var if var != "pico" else "auto")
-                    lines.append(f'export {coll_key.upper()}_ALGORITHMS_CVARS="{",".join(cvar)}"')
+                        cons = e.get("constraints", [])
+                        has_count = False
+                        if isinstance(cons, list):
+                            for c in cons:
+                                if isinstance(c, dict) and c.get("key") == "count":
+                                    has_count = True
+                                    break
+                        if has_count:
+                            nm = str(e.get("name", ""))
+                            if nm:
+                                skip_names.append(nm)
+                    write_export(prefix + f"{coll_key.upper()}_ALGORITHMS_SKIP", csv(skip_names), quote=True)
 
+                    # is_segmented flags from tags
+                    seg_flags: List[str] = []
+                    for e in entries:
+                        tags = e.get("tags", [])
+                        seg_flags.append("yes" if isinstance(tags, list) and "is_segmented" in tags else "no")
+                    write_export(prefix + f"{coll_key.upper()}_ALGORITHMS_IS_SEGMENTED", csv(seg_flags), quote=True)
 
+                    # CVARS (MPICH-family only)
+                    if is_mpich_family:
+                        cvars: List[str] = []
+                        for e in entries:
+                            sel = e.get("selection", "auto")
+                            cvars.append("auto" if sel == "pico" else str(sel))
+                        write_export(prefix + f"{coll_key.upper()}_ALGORITHMS_CVARS", csv(cvars), quote=True)
 
     # --- Write file and chmod +x ---
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
 
-    # Make executable
     mode = os.stat(out_path).st_mode
     os.chmod(out_path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-
     return str(out_path)
 
 
