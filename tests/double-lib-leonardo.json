@@ -35,7 +35,7 @@
     "dry_run": false,
     "compress": true,
     "delete": true,
-    "number_of_nodes": 2,
+    "number_of_nodes": 4,
     "output_level": "statistics",
     "dimensions": {
       "dtype": "int32",
@@ -97,24 +97,55 @@
       "algorithms": {
         "allreduce": [
           {
-            "name": "default_ompi",
+            "name": "recursive_doubling_ompi",
             "coll": "allreduce",
-            "desc": "Open MPI default algorithm selection",
+            "desc": "Open MPI recursive doubling algorithm.",
             "version": "4.1.5",
-            "selection": 0,
+            "selection": 3,
             "tags": [
-              "default"
+              "recursive_doubling"
             ]
           },
           {
-            "name": "linear_ompi",
+            "name": "ring_ompi",
             "coll": "allreduce",
-            "desc": "Open MPI linear algorithm from 'basic' module, consists in a Reduce to rank 0 followed by a Bcast. Both Reduce and Bcast are the one from the 'basic' module.",
+            "desc": "Open MPI ring algorithm. Not to be used if 'count'<'comm_sz'. If invoked on 'count'<'comm_sz' fallbacks to 'recursive_doubling'.",
             "version": "4.1.5",
-            "selection": 1,
+            "selection": 4,
+            "constraints": [
+              {
+                "key": "count",
+                "conditions": [
+                  {
+                    "operator": ">=",
+                    "value": "comm_sz"
+                  }
+                ]
+              }
+            ],
             "tags": [
-              "linear",
-              "can_crash"
+              "ring"
+            ]
+          },
+          {
+            "name": "rabenseifner_ompi",
+            "coll": "allreduce",
+            "desc": "Open MPI Rabenseifner algorithm. Not to be used if 'count'<'comm_sz'. Not to be used if 'op' is not commutative. If used on not commutative 'op' fallback to 'OMPI_LINEAR'.",
+            "version": "4.1.5",
+            "selection": 6,
+            "constraints": [
+              {
+                "key": "count",
+                "conditions": [
+                  {
+                    "operator": ">=",
+                    "value": "comm_sz"
+                  }
+                ]
+              }
+            ],
+            "tags": [
+              "rabenseifner"
             ]
           }
         ]
@@ -145,6 +176,37 @@
       "pico_backend": false,
       "algorithms": {
         "allreduce": [
+          {
+            "name": "recursive_doubling_ompi",
+            "coll": "allreduce",
+            "desc": "Open MPI recursive doubling algorithm.",
+            "version": "4.1.5",
+            "selection": 3,
+            "tags": [
+              "recursive_doubling"
+            ]
+          },
+          {
+            "name": "ring_ompi",
+            "coll": "allreduce",
+            "desc": "Open MPI ring algorithm. Not to be used if 'count'<'comm_sz'. If invoked on 'count'<'comm_sz' fallbacks to 'recursive_doubling'.",
+            "version": "4.1.5",
+            "selection": 4,
+            "constraints": [
+              {
+                "key": "count",
+                "conditions": [
+                  {
+                    "operator": ">=",
+                    "value": "comm_sz"
+                  }
+                ]
+              }
+            ],
+            "tags": [
+              "ring"
+            ]
+          },
           {
             "name": "rabenseifner_ompi",
             "coll": "allreduce",

@@ -4,10 +4,10 @@ source scripts/utils.sh
 
 # 1. Set default values for the variables (are defined in `utils.sh`)
 if [[ -n "${BASH_SOURCE[0]}" ]]; then
-    export BINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    export PICO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 else
   warning "BASH_SOURCE is not set.""Using current working directory (pwd) as fallback.""This may cause issues in some environments"
-    export BINE_DIR="$(pwd)"
+    export PICO_DIR="$(pwd)"
 fi
 
 
@@ -62,13 +62,7 @@ else
     load_modules || exit 1
 fi
 
-# 6. Activate the virtual environment, install Python packages if not presents
-if [[ "$COMPILE_ONLY" == "no" ]]; then
-    activate_virtualenv || exit 1
-    success "Virtual environment activated."
-fi
-
-# 7. Compile code. If `$DEBUG_MODE` is `yes`, debug flags will be added
+# 6. Compile code. If `$DEBUG_MODE` is `yes`, debug flags will be added
 if [[ -n "$TUI_FILE" ]]; then
     compile_all_libraries_tui || exit 1
 else
@@ -76,14 +70,24 @@ else
 fi
 [[ "$COMPILE_ONLY" == "yes" ]] && success "Compile only mode. Exiting..." && exit 0
 
+
+# 7. Activate the virtual environment, install Python packages if not presents
+activate_virtualenv || exit 1
+success "Virtual environment activated."
+
 # 8. Defines env dependant variables
-export ALGORITHM_CONFIG_FILE="$BINE_DIR/config/algorithm_config.json"
-export LOCATION_DIR="$BINE_DIR/results/$LOCATION"
-export OUTPUT_DIR="$BINE_DIR/results/$LOCATION/$TIMESTAMP"
-export PICO_EXEC_CPU=$BINE_DIR/bin/pico_core
-[[ "$GPU_AWARENESS" == "yes" ]] && export PICO_EXEC_GPU=$BINE_DIR/bin/pico_core_cuda
-export ALGO_CHANGE_SCRIPT=$BINE_DIR/selector/change_dynamic_rules.py
-export DYNAMIC_RULE_FILE=$BINE_DIR/selector/ompi_dynamic_rules.txt
+export ALGORITHM_CONFIG_FILE="$PICO_DIR/config/algorithm_config.json" # WARN: to be deprecated
+export LOCATION_DIR="$PICO_DIR/results/$LOCATION"
+export OUTPUT_DIR="$PICO_DIR/results/$LOCATION/$TIMESTAMP"
+
+if [[ -z "$TUI_FILE" ]]; then
+    # CLI/back-compat: single-binary layout
+    export PICO_EXEC_CPU=$PICO_DIR/bin/pico_core
+    [[ "$GPU_AWARENESS" == "yes" ]] && export PICO_EXEC_GPU=$PICO_DIR/bin/pico_core_cuda
+fi
+
+export ALGO_CHANGE_SCRIPT=$PICO_DIR/selector/change_dynamic_rules.py
+export DYNAMIC_RULE_FILE=$PICO_DIR/selector/ompi_dynamic_rules.txt
 
 # 9. Create output directories if not in debug mode or dry run
 if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
@@ -97,48 +101,11 @@ if [[ "$LOCATION" == "local" ]]; then
     scripts/run_test_suite.sh
 else
     if [[ -n "$TUI_FILE" ]]; then
-        MAX_TASKS_PER_NODE=""
-        MAX_GPU_PER_NODE=""
-        ANY_GPU_AWARE="no"
-
-        if [[ "${LIB_COUNT:-0}" =~ ^[0-9]+$ ]] && (( LIB_COUNT > 0 )); then
-            for (( i=0; i<LIB_COUNT; i++ )); do
-                # CPU tasks
-                tpn_var="LIB_${i}_TASKS_PER_NODE"
-                tpn_csv="$(_get_var "$tpn_var")"
-                if [[ -n "$tpn_csv" ]]; then
-                    for t in ${tpn_csv//,/ }; do
-                        [[ "$t" =~ ^[0-9]+$ ]] || continue
-                        if [[ -z "$MAX_TASKS_PER_NODE" || "$t" -gt "$MAX_TASKS_PER_NODE" ]]; then
-                            MAX_TASKS_PER_NODE="$t"
-                        fi
-                    done
-                fi
-
-                # GPU tasks
-                gpn_var="LIB_${i}_GPU_PER_NODE"
-                gpn_csv="$(_get_var "$gpn_var")"
-                gaw_var="LIB_${i}_GPU_AWARENESS"
-                gaw_val="$(_get_var "$gaw_var")"
-                if [[ "$gaw_val" == "yes" && -n "$gpn_csv" ]]; then
-                    ANY_GPU_AWARE="yes"
-                    for g in ${gpn_csv//,/ }; do
-                        [[ "$g" =~ ^[0-9]+$ ]] || continue
-                        if [[ -z "$MAX_GPU_PER_NODE" || "$g" -gt "$MAX_GPU_PER_NODE" ]]; then
-                            MAX_GPU_PER_NODE="$g"
-                        fi
-                        # also consider GPU TPN for the global cap (1:1 CPU:GPU mapping)
-                        if [[ -z "$MAX_TASKS_PER_NODE" || "$g" -gt "$MAX_TASKS_PER_NODE" ]]; then
-                            MAX_TASKS_PER_NODE="$g"
-                        fi
-                    done
-                fi
-            done
-        fi
-
-        # Expose for later consumers / compatibility
-        [[ -n "$MAX_GPU_PER_NODE" ]] && export MAX_GPU_TEST="$MAX_GPU_PER_NODE"
-        [[ -n "$MAX_TASKS_PER_NODE" ]] && export SLURM_TASKS_PER_NODE="$MAX_TASKS_PER_NODE"
+        compute_slurm_caps_from_libs
+        [[ "$DEBUG_MODE" == "yes" ]] && inform "Derived submission caps (TUI):" \
+              "Max tasks per node: ${MAX_TASKS_PER_NODE:-<none>}" \
+              "Max GPUs per node:  ${MAX_GPU_PER_NODE:-<none>}" \
+              "Any GPU aware:      ${ANY_GPU_AWARE}"
     fi
 
     SLURM_PARAMS=" --account $PICO_ACCOUNT --nodes $N_NODES --time $TEST_TIME --partition $PARTITION"
@@ -149,14 +116,9 @@ else
         [[ -n "$QOS_GRES" ]] && GRES="$QOS_GRES"
     fi
 
-    if [[ "${ANY_GPU_AWARE:-$GPU_AWARENESS}" == "yes" ]]; then
-        if [[ -n "$MAX_GPU_PER_NODE" ]]; then
-            [[ -z "$GRES" ]] && GRES="gpu:$MAX_GPU_PER_NODE"
-            SLURM_PARAMS+=" --gpus-per-node $MAX_GPU_PER_NODE"
-        elif [[ -n "$MAX_GPU_TEST" ]]; then
-            [[ -z "$GRES" ]] && GRES="gpu:$MAX_GPU_TEST"
-            SLURM_PARAMS+=" --gpus-per-node $MAX_GPU_TEST"
-        fi
+    if [[ "${ANY_GPU_AWARE:-$GPU_AWARENESS}" == "yes" &&  -n "$MAX_GPU_PER_NODE" ]]; then
+        [[ -z "$GRES" ]] && GRES="gpu:$MAX_GPU_PER_NODE"
+        SLURM_PARAMS+=" --gpus-per-node $MAX_GPU_PER_NODE"
     fi
 
     if [[ "$LOCATION" != "leonardo" || -n "$SLURM_TASKS_PER_NODE" ]]; then
@@ -179,9 +141,11 @@ else
         inform "Salloc with parameters: $SLURM_PARAMS"
         salloc $SLURM_PARAMS
     else
-        [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]] && SLURM_PARAMS+=" --exclusive --output=$OUTPUT_DIR/slurm_%j.out --error=$OUTPUT_DIR/slurm_%j.err" || SLURM_PARAMS+=" --output=debug_%j.out"
+        [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]] && \
+          SLURM_PARAMS+=" --exclusive --output=$OUTPUT_DIR/slurm_%j.out --error=$OUTPUT_DIR/slurm_%j.err" || \
+          SLURM_PARAMS+=" --output=debug_%j.out"
         export SLURM_PARAMS="$SLURM_PARAMS"
         inform "Sbatching job with parameters: $SLURM_PARAMS"
-        sbatch $SLURM_PARAMS "$BINE_DIR/scripts/run_test_suite.sh"
+        sbatch $SLURM_PARAMS "$PICO_DIR/scripts/run_test_suite.sh"
     fi
 fi

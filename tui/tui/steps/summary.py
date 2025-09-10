@@ -14,7 +14,7 @@ from textual.containers import Horizontal, Vertical
 from textual.app import ComposeResult
 from tui.steps.base import StepScreen
 from textual.screen import Screen
-from config_loader import BINE_DIR
+from config_loader import PICO_DIR
 from typing import Any, Dict, Iterable, List, Tuple, Union
 
 JsonLike = Union[Dict[str, Any], str, Path]
@@ -251,11 +251,52 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
                 # else: omit GPU_AWARENESS when empty or all zeroes
             # else: omit GPU_PER_NODE
 
-            # Per-library modules: lib_load + (gpu module only when awareness yes)
+            # Per-library load mechanism: module | set_env | default
             lib_modules: List[str] = []
-            lib_load = lib.get("lib_load")
-            if isinstance(lib_load, dict) and lib_load.get("type") == "module" and lib_load.get("module"):
-                lib_modules.append(str(lib_load["module"]))
+            lib_load = lib.get("lib_load", {})
+            load_type = None
+            if isinstance(lib_load, dict):
+                lt = str(lib_load.get("type", "default")).strip().lower()
+                if lt in ("module", "set_env", "default"):
+                    load_type = lt
+                else:
+                    load_type = "default"
+            else:
+                load_type = "default"
+
+            write_export(prefix + "LOAD_TYPE", load_type, quote=True)
+
+            if load_type == "module":
+                mod = lib_load.get("module")
+                if mod:
+                    lib_modules.append(str(mod))
+            elif load_type == "set_env":
+                env_var = lib_load.get("env_var", {})
+                if isinstance(env_var, dict) and env_var:
+                    keys_out: List[str] = []
+                    for k, raw in env_var.items():
+                        # raw may be like "/opt/xxx/bin:$PATH" or just "/opt/xxx/bin"
+                        s = str(raw)
+                        # split by ":" and collect prefixes until we hit a ref to $KEY
+                        parts = s.split(":")
+                        prefixes: List[str] = []
+                        key_uc = str(k).upper()
+                        stopper_tokens = {f"${key_uc}", f"${{{key_uc}}}"}
+                        for p in parts:
+                            p_stripped = p.strip()
+                            if p_stripped in stopper_tokens or p_stripped.endswith(key_uc) and "$" in p_stripped:
+                                break
+                            prefixes.append(p_stripped)
+                        # if we didn’t see a stopper, and the value had no "$KEY", take the full string
+                        if not prefixes and "$" not in s:
+                            prefixes = [s.strip()]
+                        # write per-key export if we have anything to prepend
+                        if prefixes:
+                            keys_out.append(str(k))
+                            write_export(prefix + f"ENV_PREPEND_{str(k).upper()}", ":".join(prefixes), quote=True)
+                    if keys_out:
+                        write_export(prefix + "ENV_PREPEND_VARS", ",".join(keys_out), quote=True)
+            # load_type == "default": nothing to add here
 
             if gpu_awareness_yes:
                 gpu_support = lib.get("gpu_support", {})
@@ -345,7 +386,7 @@ SAVE_MSG =  "███████╗ █████╗ ██╗   ██╗�
             "███████║██║  ██║ ╚████╔╝ ███████╗    ██╗   \n"\
             "╚══════╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝    ╚═╝   \n"
 
-TEST_DIR = BINE_DIR / "tests"
+TEST_DIR = PICO_DIR / "tests"
 
 class SaveScreen(Screen):
     BINDINGS = [

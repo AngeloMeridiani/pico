@@ -36,7 +36,7 @@ if [[ ! -n "$TUI_FILE" ]]; then
                     fi
 
                     # Run script to parse and generate test environment variables
-                    python3 $BINE_DIR/config/parse_test.py || exit 1
+                    python3 $PICO_DIR/config/parse_test.py || exit 1
                     source $TEST_ENV
                     load_other_env_var
                     success "📄 Test configuration ${TEST_CONFIG} parsed (CPU, ntasks=${CURRENT_TASKS_PER_NODE})"
@@ -45,7 +45,7 @@ if [[ ! -n "$TUI_FILE" ]]; then
                     if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
                         export DATA_DIR="$OUTPUT_DIR/$iter"
                         mkdir -p "$DATA_DIR"
-                        python3 $BINE_DIR/results/generate_metadata.py $iter || exit 1
+                        python3 $PICO_DIR/results/generate_metadata.py $iter || exit 1
                         success "📂 Metadata of $DATA_DIR created"
                     fi
 
@@ -68,7 +68,7 @@ if [[ ! -n "$TUI_FILE" ]]; then
                 export PICO_EXEC=$PICO_EXEC_GPU
 
                 # Run script to parse and generate test environment variables
-                python3 $BINE_DIR/config/parse_test.py || exit 1
+                python3 $PICO_DIR/config/parse_test.py || exit 1
                 source $TEST_ENV
                 load_other_env_var
                 success "📄 Test configuration ${TEST_CONFIG} parsed (GPU, gpus per node=${CURRENT_TASKS_PER_NODE})"
@@ -77,7 +77,7 @@ if [[ ! -n "$TUI_FILE" ]]; then
                 if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
                     export DATA_DIR="$OUTPUT_DIR/$iter"
                     mkdir -p "$DATA_DIR"
-                    python3 $BINE_DIR/results/generate_metadata.py $iter || exit 1
+                    python3 $PICO_DIR/results/generate_metadata.py $iter || exit 1
                     success "📂 Metadata of $DATA_DIR created"
                 fi
 
@@ -180,7 +180,7 @@ else
                     if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
                         export DATA_DIR="$OUTPUT_DIR/$iter"
                         mkdir -p "$DATA_DIR"
-                        python3 $BINE_DIR/results/generate_metadata.py $iter || exit 1
+                        python3 $PICO_DIR/results/generate_metadata.py $iter || exit 1
                         success "📂 Metadata of $DATA_DIR created"
                     fi
 
@@ -210,7 +210,7 @@ else
                 if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
                     export DATA_DIR="$OUTPUT_DIR/$iter"
                     mkdir -p "$DATA_DIR"
-                    python3 $BINE_DIR/results/generate_metadata.py $iter || exit 1
+                    python3 $PICO_DIR/results/generate_metadata.py $iter || exit 1
                     success "📂 Metadata of $DATA_DIR created"
                 fi
 
