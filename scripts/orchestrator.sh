@@ -51,5 +51,5 @@ if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" && "$COMPRESS" == "yes" ]]; th
     fi
 fi
 
-if [[ "$LOCATION" != "local" ]] && squeue -j $SLURM_JOB_ID
+[[ "$LOCATION" != "local" ]] && squeue -j $SLURM_JOB_ID
 

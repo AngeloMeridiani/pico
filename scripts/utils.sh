@@ -1246,6 +1246,7 @@ activate_lib_context() {
     esac
     return 0
 }
+export -f activate_lib_context
 
 restore_lib_context() {
     local i="$1"
@@ -1260,6 +1261,7 @@ restore_lib_context() {
     esac
     return 0
 }
+export -f restore_lib_context
 
 ###############################################################################
 # Per-library exports (compiler/lib identity) used by helpers & sanity prints
@@ -1270,6 +1272,58 @@ export_lib_identity() {
     export MPI_LIB_VERSION="$(_get_var "LIB_${i}_MPI_LIB_VERSION")"
     export PICOCC="$(_get_var "LIB_${i}_PICOCC")"
 }
+export -f export_lib_identity
+
+###############################################################################
+# Prepare per-collective legacy-compatible vars (ALGOS, SKIP, IS_SEGMENTED, CVARS?)
+# Sets:
+#   COLLECTIVE_TYPE, ALGOS, SKIP, IS_SEGMENTED (array), CVARS (array if MPICH-family)
+# Returns 0 on success, 1 to skip collective (e.g. no algorithms)
+###############################################################################
+prepare_collective_vars() {
+    local i="$1" coll="$2"
+    local COLL_UPPER="${coll^^}"
+
+    export COLLECTIVE_TYPE="$COLL_UPPER"
+
+    local ALGS_CSV="$(_get_var "LIB_${i}_${COLL_UPPER}_ALGORITHMS")"
+    if [[ -z "$ALGS_CSV" ]]; then
+        warning "LIB_${i} ${coll}: no algorithms; skipping"
+        return 1
+    fi
+    IFS=',' read -r -a _ALG_NAMES <<< "$ALGS_CSV"
+    export ALGOS="${ALGS_CSV//,/ }"
+
+    local SKIPS_CSV="$(_get_var "LIB_${i}_${COLL_UPPER}_ALGORITHMS_SKIP")"
+    IFS=',' read -r -a _SKIP_FLAGS <<< "$SKIPS_CSV"
+    export SKIP="${SKIPS_CSV//,/ }"
+
+    local SEG_CSV="$(_get_var "LIB_${i}_${COLL_UPPER}_ALGORITHMS_IS_SEGMENTED")"
+    if [[ -z "$SEG_CSV" ]]; then
+        IS_SEGMENTED=()
+        for ((k=0; k<${#_ALG_NAMES[@]}; k++)); do IS_SEGMENTED+=(no); done
+    else
+        IFS=',' read -r -a IS_SEGMENTED <<< "$SEG_CSV"
+        if (( ${#IS_SEGMENTED[@]} < ${#_ALG_NAMES[@]} )); then
+            for ((k=${#IS_SEGMENTED[@]}; k<${#_ALG_NAMES[@]}; k++)); do IS_SEGMENTED+=(no); done
+        elif (( ${#IS_SEGMENTED[@]} > ${#_ALG_NAMES[@]} )); then
+            IS_SEGMENTED=( "${IS_SEGMENTED[@]:0:${#_ALG_NAMES[@]}}" )
+        fi
+    fi
+
+    unset CVARS
+    if [[ "$MPI_LIB" == "MPICH" || "$MPI_LIB" == "CRAY_MPICH" ]]; then
+        local CVARS_CSV="$(_get_var "LIB_${i}_${COLL_UPPER}_ALGORITHMS_CVARS")"
+        if [[ -z "$CVARS_CSV" ]]; then
+            error "LIB_${i} ${coll}: MPICH-family requires ${COLL_UPPER}_ALGORITHMS_CVARS"
+            return 1
+        fi
+        IFS=',' read -r -a CVARS <<< "$CVARS_CSV"
+    fi
+
+    return 0
+}
+export -f prepare_collective_vars
 
 ###############################################################################
 # Run one test “mode” (CPU or GPU) for a given lib/collective & concurrency
@@ -1297,6 +1351,7 @@ run_mode_once() {
     ((_iter_ref++))
     return 0
 }
+export -f run_mode_once
 
 ###############################################################################
 # Per-lib: run GPU loop (if any) and CPU loop
@@ -1353,6 +1408,7 @@ run_collective_for_lib() {
     fi
     return 0
 }
+export -f run_collective_for_lib
 
 ###############################################################################
 # Per-lib: drive all collectives for a library index
@@ -1387,6 +1443,8 @@ run_library_tui() {
     restore_lib_context "$i"
     return 0
 }
+export -f run_library_tui
+
 
 
 
@@ -1409,6 +1467,7 @@ cli_set_awareness_and_tasks() {
         export PICO_EXEC="$PICO_EXEC_GPU"
     fi
 }
+export -f cli_set_awareness_and_tasks
 
 # Prepare env for one iteration (parse + load test env)
 cli_prepare_iteration_env() {
@@ -1418,6 +1477,7 @@ cli_prepare_iteration_env() {
     load_other_env_var
     return 0
 }
+export -f cli_prepare_iteration_env
 
 # Create metadata dir (if enabled) and call generator; name-ref for iter
 cli_prepare_metadata() {
@@ -1430,6 +1490,7 @@ cli_prepare_metadata() {
     fi
     return 0
 }
+export -f cli_prepare_metadata
 
 # One full iteration run (env already set): print summary + run tests; name-ref iter++
 cli_run_one_iteration() {
@@ -1438,6 +1499,7 @@ cli_run_one_iteration() {
     run_all_tests
     ((_iter_ref++))
 }
+export -f cli_run_one_iteration
 
 # CPU inner loop for one config; name-ref for iter
 cli_run_cpu_set() {
@@ -1465,6 +1527,7 @@ cli_run_cpu_set() {
         fi
     done
 }
+export -f cli_run_cpu_set
 
 # GPU path for one n_gpu; name-ref for iter
 cli_run_gpu_once() {
@@ -1474,3 +1537,4 @@ cli_run_gpu_once() {
     cli_prepare_metadata _iter_ref || return 1
     cli_run_one_iteration _iter_ref
 }
+export -f cli_run_gpu_once
