@@ -1501,14 +1501,15 @@ cli_run_one_iteration() {
 }
 export -f cli_run_one_iteration
 
-# CPU inner loop for one config; name-ref for iter
+# CPU inner loop for one config; pass the *name* of the iter variable
 cli_run_cpu_set() {
-    local -n _iter_ref=$1
+    local iter_name="$1"          # raw name of the iter var (e.g., "iter")
+    local -n _iter_ref="$iter_name"  # local nameref for convenience
+
     for ntasks in ${TASKS_PER_NODE//,/ }; do
         export CURRENT_TASKS_PER_NODE="$ntasks"
         export MPI_TASKS=$(( N_NODES * CURRENT_TASKS_PER_NODE ))
 
-        # If --ntasks overrides, keep CURRENT_TASKS_PER_NODE only for metadata
         if [[ -n "$FORCE_TASKS" ]]; then
             export MPI_TASKS="$FORCE_TASKS"
             export CURRENT_TASKS_PER_NODE=$(( FORCE_TASKS / N_NODES ))
@@ -1517,10 +1518,10 @@ cli_run_cpu_set() {
         cli_prepare_iteration_env || { error "Failed to prepare test env (CPU)"; return 1; }
         success "📄 Config ${TEST_CONFIG} parsed (CPU, ntasks=${CURRENT_TASKS_PER_NODE})"
 
-        cli_prepare_metadata _iter_ref || return 1
-        cli_run_one_iteration _iter_ref
+        # pass the ORIGINAL name downstream
+        cli_prepare_metadata "$iter_name" || return 1
+        cli_run_one_iteration "$iter_name"
 
-        # If --ntasks is set, we skip remaining TPN values
         if [[ -n "$FORCE_TASKS" ]]; then
             warning "--ntasks is set, skipping possible --tasks-per-node values"
             break
@@ -1529,12 +1530,15 @@ cli_run_cpu_set() {
 }
 export -f cli_run_cpu_set
 
-# GPU path for one n_gpu; name-ref for iter
+# GPU path for one n_gpu; pass the *name* of the iter variable
 cli_run_gpu_once() {
-    local -n _iter_ref=$1
+    local iter_name="$1"           # raw name
+    local -n _iter_ref="$iter_name"
+
     cli_prepare_iteration_env || { error "Failed to prepare test env (GPU)"; return 1; }
     success "📄 Config ${TEST_CONFIG} parsed (GPU, gpus per node=${CURRENT_TASKS_PER_NODE})"
-    cli_prepare_metadata _iter_ref || return 1
-    cli_run_one_iteration _iter_ref
+
+    cli_prepare_metadata "$iter_name" || return 1
+    cli_run_one_iteration "$iter_name"
 }
 export -f cli_run_gpu_once
