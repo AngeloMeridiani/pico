@@ -851,12 +851,10 @@ compile_all_libraries_tui() {
     [[ "$DEBUG_MODE" == "yes" ]] && mk_debug=1
 
     for (( i=0; i<count; i++ )); do
-        # Per-lib metadata
+        export_lib_identity "$i"   # sets: MPI_LIB, MPI_LIB_VERSION, PICOCC
+
         local libmods="$(_get_var "LIB_${i}_MODULES")"
         local load_type="$(_get_var "LIB_${i}_LOAD_TYPE")"
-        export PICOCC="$(_get_var "LIB_${i}_PICOCC")"
-        export MPI_LIB="$(_get_var "LIB_${i}_MPI_LIB")"
-        export MPI_LIB_VERSION="$(_get_var "LIB_${i}_MPI_LIB_VERSION")"
 
         # CUDA build only if: GPU_AWARENESS=yes ∧ any GPU>0 ∧ GPU_LIB=cuda
         local gaw="$(_get_var "LIB_${i}_GPU_AWARENESS")"
@@ -875,28 +873,12 @@ compile_all_libraries_tui() {
             need_cuda_build=1
         fi
 
+        # -------- Activate per-lib context (module | set_env | default) --------
         trace_env_snapshot "lib $i BEFORE apply/load"
-        if [[ "$load_type" == "module" ]]; then
-            [[ -n "$libmods" ]] && load_modules "$libmods" || { error "No libmodules defined for library $i"; return 1; }
-        elif [[ "$load_type" == "set_env" ]]; then
-            apply_lib_env "$i" || { error "No env var found for library $i"; return 1; }
-        elif [[ "$load_type" == "default" || -z "$load_type" ]]; then
-            : # nothing to load for this library
-        else
-            warning "Unknown LOAD_TYPE='$load_type' for library $i; skipping load step."
-        fi
-
-        # ---- DEBUG ONLY: snapshot AFTER apply/load + wrapper probe ----
+        activate_lib_context "$i" || { error "Failed to activate context for library $i"; return 1; }
         [[ "$DEBUG_MODE" == "yes" ]] && inform "[lib $i] LOAD_TYPE=${load_type:-<unset>} modules=${libmods:-<none>}"
         trace_env_snapshot "lib $i AFTER apply/load"
         trace_compiler_wrapper "$PICOCC"
-        if [[ "$DEBUG_MODE" == "yes" ]]; then
-            echo -e "${BLUE}>>> [lib ${i}] Invoking build${NC}"
-            echo "  MPI_LIB: ${MPI_LIB}"
-            echo "  MPI_LIB_VERSION: ${MPI_LIB_VERSION}"
-            echo "  PICOCC: ${PICOCC}"
-            echo "  CMD: PICOCC=\"$PICOCC\" MPI_LIB=\"$MPI_LIB\" $mk"
-        fi
 
         # Per-lib output dirs
         local OUT_BIN="$PICO_DIR/bin/lib_${i}"
@@ -912,29 +894,26 @@ compile_all_libraries_tui() {
         mk+=" DEBUG=$mk_debug"
         if (( need_cuda_build )); then mk+=" CUDA_AWARE=1"; fi
 
+        if [[ "$DEBUG_MODE" == "yes" ]]; then
+            echo -e "${BLUE}>>> [lib ${i}] Invoking build${NC}"
+            echo "  MPI_LIB:         ${MPI_LIB}"
+            echo "  MPI_LIB_VERSION: ${MPI_LIB_VERSION}"
+            echo "  PICOCC:          ${PICOCC}"
+            echo "  CMD:             PICOCC=\"${PICOCC}\" MPI_LIB=\"${MPI_LIB}\" ${mk}"
+        fi
+
         if [[ "$DRY_RUN" == "yes" ]]; then
             inform "Would run (lib $i): PICOCC=\"$PICOCC\" MPI_LIB=\"$MPI_LIB\" $mk"
         else
-            PICOCC="$PICOCC" MPI_LIB="$MPI_LIB" eval "$mk" || { error "Compilation failed for library $i"; return 1; }
+            PICOCC="$PICOCC" MPI_LIB="$MPI_LIB" eval "$mk" || { error "Compilation failed for library $i"; restore_lib_context "$i"; return 1; }
         fi
 
         # Export the per-lib execs if they exist
-        [[ -f "$OUT_BIN/pico_core" ]] && \
-          export "LIB_${i}_PICO_EXEC_CPU=$OUT_BIN/pico_core" && \
-          trace_ldd "$OUT_BIN/pico_core"
-        [[ -f "$OUT_BIN/pico_core_cuda" ]] && \
-          export "LIB_${i}_PICO_EXEC_GPU=$OUT_BIN/pico_core_cuda" && \
-          trace_ldd "$OUT_BIN/pico_core_cuda"
+        [[ -f "$OUT_BIN/pico_core" ]] && export "LIB_${i}_PICO_EXEC_CPU=$OUT_BIN/pico_core" && trace_ldd "$OUT_BIN/pico_core"
+        [[ -f "$OUT_BIN/pico_core_cuda" ]] && export "LIB_${i}_PICO_EXEC_GPU=$OUT_BIN/pico_core_cuda" && trace_ldd "$OUT_BIN/pico_core_cuda"
 
         # Unload only this library's modules (keep general ones)
-        if [[ "$load_type" == "module" ]]; then
-            [[ -n "$libmods" ]] && unload_modules "$libmods" || { error "No libmodules defined for library $i"; return 1; }
-        elif [[ "$load_type" == "set_env" ]]; then
-            restore_lib_env "$i" || { error "No env var found for library $i"; return 1; }
-        else
-            :
-        fi
-
+        restore_lib_context "$i" || true
     done
 
     success "Per-library compilation completed."
@@ -1241,3 +1220,257 @@ __csv_to_array() {
 }
 export -f __csv_to_array
 
+
+
+###############################################################################
+# Per-library context: apply/restore (module | set_env | default)
+###############################################################################
+activate_lib_context() {
+    local i="$1"
+    local load_type="$(_get_var "LIB_${i}_LOAD_TYPE")"
+    local libmods="$(_get_var "LIB_${i}_MODULES")"
+
+    case "$load_type" in
+        module)
+            [[ -n "$libmods" ]] && load_modules "$libmods" || { error "LIB_${i}: no MODULES to load"; return 1; }
+            ;;
+        set_env)
+            apply_lib_env "$i" || { error "LIB_${i}: set_env requested but no env vars found"; return 1; }
+            ;;
+        ""|default)
+            : # nothing
+            ;;
+        *)
+            warning "LIB_${i}: unknown LOAD_TYPE='$load_type'; proceeding without env change"
+            ;;
+    esac
+    return 0
+}
+
+restore_lib_context() {
+    local i="$1"
+    local load_type="$(_get_var "LIB_${i}_LOAD_TYPE")"
+    local libmods="$(_get_var "LIB_${i}_MODULES")"
+
+    case "$load_type" in
+        module)   [[ -n "$libmods" ]] && unload_modules "$libmods" || true ;;
+        set_env)  restore_lib_env "$i" || true ;;
+        ""|default) : ;;
+        *) : ;;
+    esac
+    return 0
+}
+
+###############################################################################
+# Per-library exports (compiler/lib identity) used by helpers & sanity prints
+###############################################################################
+export_lib_identity() {
+    local i="$1"
+    export MPI_LIB="$(_get_var "LIB_${i}_MPI_LIB")"
+    export MPI_LIB_VERSION="$(_get_var "LIB_${i}_MPI_LIB_VERSION")"
+    export PICOCC="$(_get_var "LIB_${i}_PICOCC")"
+}
+
+###############################################################################
+# Run one test “mode” (CPU or GPU) for a given lib/collective & concurrency
+# Inputs (exports expected to be set by caller):
+#   - COLLECTIVE_TYPE, ALGOS, SKIP, IS_SEGMENTED[], (CVARS[])
+#   - N_NODES, TYPES, SIZES, DEBUG_MODE, DRY_RUN
+#   - PICO_EXEC, CURRENT_TASKS_PER_NODE, MPI_TASKS, GPU_AWARENESS
+# Side-effects:
+#   - generates metadata (unless debug/dry)
+#   - prints sanity and calls run_all_tests
+###############################################################################
+run_mode_once() {
+    local -n _iter_ref=$1  # pass-by-name: iter variable name
+
+    load_other_env_var
+
+    if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
+        export DATA_DIR="$OUTPUT_DIR/${_iter_ref}"
+        mkdir -p "$DATA_DIR"
+        python3 "$PICO_DIR/results/generate_metadata.py" "${_iter_ref}" || return 1
+    fi
+
+    print_sanity_checks
+    run_all_tests
+    ((_iter_ref++))
+    return 0
+}
+
+###############################################################################
+# Per-lib: run GPU loop (if any) and CPU loop
+# Chooses PICO_EXEC from per-lib compiled paths with fallback to global ones
+###############################################################################
+run_collective_for_lib() {
+    local i="$1" coll="$2"
+    local iter_name="$3" # name of the iter variable to bump
+
+    # 1) Make legacy compatibles for this collective
+    prepare_collective_vars "$i" "$coll" || return 0
+
+    # 2) Resolve execs compiled for this library
+    local LIB_PICO_CPU="$(_get_var "LIB_${i}_PICO_EXEC_CPU")"
+    local LIB_PICO_GPU="$(_get_var "LIB_${i}_PICO_EXEC_GPU")"
+
+    # 3) GPU loop (if awareness yes)
+    local gaw="$(_get_var "LIB_${i}_GPU_AWARENESS")"
+    local gpn_csv="$(_get_var "LIB_${i}_GPU_PER_NODE")"
+    if [[ "$gaw" == "yes" && -n "$gpn_csv" ]]; then
+        for n_gpu in ${gpn_csv//,/ }; do
+            [[ "$n_gpu" =~ ^[0-9]+$ ]] || continue
+            (( n_gpu == 0 )) && continue
+            export GPU_AWARENESS="yes"
+            export CURRENT_TASKS_PER_NODE=$n_gpu
+            export MPI_TASKS=$(( N_NODES * n_gpu ))
+            export PICO_EXEC="${LIB_PICO_GPU:-$PICO_EXEC_GPU}"
+            run_mode_once "$iter_name" || return 1
+        done
+    fi
+
+    # 4) CPU loop
+    local tpn_csv="$(_get_var "LIB_${i}_TASKS_PER_NODE")"
+    if [[ -n "$tpn_csv" ]]; then
+        for ntasks in ${tpn_csv//,/ }; do
+            [[ "$ntasks" =~ ^[0-9]+$ ]] || continue
+            export GPU_AWARENESS="no"
+            export CURRENT_TASKS_PER_NODE=$ntasks
+            export MPI_TASKS=$(( N_NODES * CURRENT_TASKS_PER_NODE ))
+            export PICO_EXEC="${LIB_PICO_CPU:-$PICO_EXEC_CPU}"
+
+            if [[ -n "$FORCE_TASKS" ]]; then
+                export MPI_TASKS=$FORCE_TASKS
+                export CURRENT_TASKS_PER_NODE=$(( FORCE_TASKS / N_NODES ))
+            fi
+
+            run_mode_once "$iter_name" || return 1
+
+            if [[ -n "$FORCE_TASKS" ]]; then
+                warning "--ntasks set; skipping remaining ntasks-per-node for this lib/collective"
+                break
+            fi
+        done
+    fi
+    return 0
+}
+
+###############################################################################
+# Per-lib: drive all collectives for a library index
+###############################################################################
+run_library_tui() {
+    local i="$1"
+    local iter_name="$2"  # name of outer iter variable
+
+    # Export per-lib identity so helpers & prints show correct lib
+    export_lib_identity "$i" || return 1
+
+    # Activate the library runtime context
+    activate_lib_context "$i" || return 1
+
+    # Per-lib collectives list
+    local lib_collectives="$(_get_var "LIB_${i}_COLLECTIVES")"
+    if [[ -z "$lib_collectives" ]]; then
+        warning "LIB_${i}: no COLLECTIVES; skipping"
+        restore_lib_context "$i"
+        return 0
+    fi
+
+    # Info
+    local name="$(_get_var "LIB_${i}_NAME")"
+    local ver="$(_get_var "LIB_${i}_VERSION")"
+    inform "▶ Running library $i: ${name:-<unknown>} ${ver:-}"
+
+    for coll in ${lib_collectives//,/ }; do
+        run_collective_for_lib "$i" "$coll" "$iter_name" || { restore_lib_context "$i"; return 1; }
+    done
+
+    restore_lib_context "$i"
+    return 0
+}
+
+
+
+##################################################################################
+# CLI mode functions (outer loops, env prep, metadata, sanity, run)
+##################################################################################
+# WARN: TO BE DEPRECATED
+
+# Decide awareness / tasks / exec for a single n_gpu value
+cli_set_awareness_and_tasks() {
+    local n_gpu="$1"
+    if [[ "$n_gpu" == "0" ]]; then
+        export GPU_AWARENESS="no"
+        export PICO_EXEC="$PICO_EXEC_CPU"
+        # CURRENT_TASKS_PER_NODE will be set by the CPU inner loop
+    else
+        export GPU_AWARENESS="yes"
+        export CURRENT_TASKS_PER_NODE="$n_gpu"
+        export MPI_TASKS=$(( N_NODES * CURRENT_TASKS_PER_NODE ))
+        export PICO_EXEC="$PICO_EXEC_GPU"
+    fi
+}
+
+# Prepare env for one iteration (parse + load test env)
+cli_prepare_iteration_env() {
+    # parse JSON -> TEST_ENV + export vars
+    python3 "$PICO_DIR/config/parse_test.py" || return 1
+    source "$TEST_ENV"
+    load_other_env_var
+    return 0
+}
+
+# Create metadata dir (if enabled) and call generator; name-ref for iter
+cli_prepare_metadata() {
+    local -n _iter_ref=$1
+    if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
+        export DATA_DIR="$OUTPUT_DIR/${_iter_ref}"
+        mkdir -p "$DATA_DIR"
+        python3 "$PICO_DIR/results/generate_metadata.py" "${_iter_ref}" || return 1
+        success "📂 Metadata of $DATA_DIR created"
+    fi
+    return 0
+}
+
+# One full iteration run (env already set): print summary + run tests; name-ref iter++
+cli_run_one_iteration() {
+    local -n _iter_ref=$1
+    print_sanity_checks
+    run_all_tests
+    ((_iter_ref++))
+}
+
+# CPU inner loop for one config; name-ref for iter
+cli_run_cpu_set() {
+    local -n _iter_ref=$1
+    for ntasks in ${TASKS_PER_NODE//,/ }; do
+        export CURRENT_TASKS_PER_NODE="$ntasks"
+        export MPI_TASKS=$(( N_NODES * CURRENT_TASKS_PER_NODE ))
+
+        # If --ntasks overrides, keep CURRENT_TASKS_PER_NODE only for metadata
+        if [[ -n "$FORCE_TASKS" ]]; then
+            export MPI_TASKS="$FORCE_TASKS"
+            export CURRENT_TASKS_PER_NODE=$(( FORCE_TASKS / N_NODES ))
+        fi
+
+        cli_prepare_iteration_env || { error "Failed to prepare test env (CPU)"; return 1; }
+        success "📄 Config ${TEST_CONFIG} parsed (CPU, ntasks=${CURRENT_TASKS_PER_NODE})"
+
+        cli_prepare_metadata _iter_ref || return 1
+        cli_run_one_iteration _iter_ref
+
+        # If --ntasks is set, we skip remaining TPN values
+        if [[ -n "$FORCE_TASKS" ]]; then
+            warning "--ntasks is set, skipping possible --tasks-per-node values"
+            break
+        fi
+    done
+}
+
+# GPU path for one n_gpu; name-ref for iter
+cli_run_gpu_once() {
+    local -n _iter_ref=$1
+    cli_prepare_iteration_env || { error "Failed to prepare test env (GPU)"; return 1; }
+    success "📄 Config ${TEST_CONFIG} parsed (GPU, gpus per node=${CURRENT_TASKS_PER_NODE})"
+    cli_prepare_metadata _iter_ref || return 1
+    cli_run_one_iteration _iter_ref
+}

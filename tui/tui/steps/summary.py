@@ -223,7 +223,6 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
 
             lib_type = lib.get("lib_type")
             if lib_type:
-                write_export(prefix + "LIB_TYPE", lib_type, quote=True)
                 write_export(prefix + "MPI_LIB", mpi_lib_tag(str(lib_type)), quote=True)
 
             # Compiler / MPI lib version

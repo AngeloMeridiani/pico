@@ -31,7 +31,7 @@
       "standard": "mpi",
       "lib_type": "Open-MPI",
       "version": "4.1.6",
-      "compiler": "nvc",
+      "compiler": "mpicc",
       "load": {
         "type": "module",
         "module": "openmpi/4.1.6--nvhpc--23.11"
@@ -54,7 +54,7 @@
       "standard": "mpi",
       "lib_type": "Open-MPI",
       "version": "4.1.6",
-      "compiler": "nvc",
+      "compiler": "mpicc",
       "load": {
         "type": "module",
         "module": "openmpi/4.1.6--nvhpc--24.3"

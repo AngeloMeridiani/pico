@@ -98,7 +98,7 @@ fi
 
 # 10. Submit the job.
 if [[ "$LOCATION" == "local" ]]; then
-    scripts/run_test_suite.sh
+    scripts/orchestrator.sh
 else
     if [[ -n "$TUI_FILE" ]]; then
         compute_slurm_caps_from_libs
@@ -146,6 +146,6 @@ else
           SLURM_PARAMS+=" --output=debug_%j.out"
         export SLURM_PARAMS="$SLURM_PARAMS"
         inform "Sbatching job with parameters: $SLURM_PARAMS"
-        sbatch $SLURM_PARAMS "$PICO_DIR/scripts/run_test_suite.sh"
+        sbatch $SLURM_PARAMS "$PICO_DIR/scripts/orchestrator.sh"
     fi
 fi

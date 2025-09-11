@@ -506,13 +506,13 @@ static inline int rounddown(int num, int factor)
     num /= factor;
     return num * factor;    /* floor(num / factor) * factor */
 }
-static uint32_t binary_to_negabinary(int32_t bin) {
+static inline uint32_t binary_to_negabinary(int32_t bin) {
     if(BINE_UNLIKELY(bin > 0x55555555)) return -1;
     const uint32_t mask = 0xAAAAAAAA;
     return (mask + bin) ^ mask;
 }
 
-static int32_t negabinary_to_binary(uint32_t neg) {
+static inline int32_t negabinary_to_binary(uint32_t neg) {
     const uint32_t mask = 0xAAAAAAAA;
     return (mask ^ neg) - mask;
 }

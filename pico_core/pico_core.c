@@ -149,7 +149,7 @@ int main(int argc, char *argv[]) {
     }
   }
   
-  // Save results to a .csv file inside `/data/` subdirectory. Bash script `run_test_suite.sh`
+  // Save results to a .csv file inside `/data/` subdirectory. Bash script `orchestrator.sh`
   // is responsible to create the `/data/` subdir.
   if(rank == 0){
     if(write_output_to_file(test_routine, highest, all_times, iter) == -1){
