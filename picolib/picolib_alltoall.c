@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <limits.h>
 
-#include "libbine.h"
-#include "libbine_utils.h"
+#include "picolib.h"
+#include "picolib_utils.h"
 
 int alltoall_bine(const void *sendbuf, size_t s_count, MPI_Datatype s_dtype,
                    void *recvbuf, size_t r_count, MPI_Datatype r_dtype, MPI_Comm comm)

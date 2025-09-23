@@ -11,7 +11,7 @@
 
 #include "pico_core_utils.h"
 #include "pico_mpi_nccl_mapper.h"
-#include "libbine.h"
+#include "picolib.h"
 
 int main(int argc, char *argv[]) {
   MPI_Init(NULL, NULL);

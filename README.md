@@ -60,7 +60,7 @@ scripts/submit_wrapper.sh -f [path_to_test_sh_file]
 PICO/
 ├── config/        # Benchmark configuration files and templates
 ├── include/       # Header files
-├── libbine/       # Benchmark infrastructure core
+├── picolib/       # Benchmark infrastructure core
 ├── pico_core/     # Main orchestration and benchmarking engine
 ├── plot/          # Scripts for result visualization
 ├── results/       # Collected output and logs

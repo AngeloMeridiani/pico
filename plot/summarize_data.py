@@ -202,7 +202,7 @@ def aggregate_results(results_dir: os.PathLike, metadata: pd.DataFrame, target_t
                     'notes': meta_row['notes'],
                     'mpi_lib': meta_row['mpi_lib'],
                     'mpi_lib_version': meta_row['mpi_lib_version'],
-                    'libbine_version': meta_row['libbine_version']
+                    'picolib_version': meta_row['picolib_version']
                 }
                 all_results.append(result)
     return pd.DataFrame(all_results)

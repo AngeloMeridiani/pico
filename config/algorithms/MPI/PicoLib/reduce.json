@@ -1,6 +1,6 @@
 {
   "bine_lat_over": {
-    "desc": "Libbine external bine latency optimal algorithm.",
+    "desc": "picolib external bine latency optimal algorithm.",
     "version": "1.0.0",
     "constraints": [
       {
@@ -31,7 +31,7 @@
     ]
   },
   "bine_bdw_over": {
-    "desc": "Libbine external bine bandwidth optimal algorithm.",
+    "desc": "picolib external bine bandwidth optimal algorithm.",
     "version": "1.0.0",
     "constraints": [
       {

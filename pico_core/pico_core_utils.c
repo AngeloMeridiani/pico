@@ -135,9 +135,6 @@ static inline allgather_func_ptr get_allgather_function(const char *algorithm) {
   CHECK_STR(algorithm, "sparbit_over", allgather_sparbit);
   CHECK_STR(algorithm, "bine_block_by_block_over_any_even", allgather_bine_block_by_block_any_even);
   CHECK_STR(algorithm, "bine_block_by_block_over", allgather_bine_block_by_block);
-  CHECK_STR(algorithm, "bine_permute_static_over", allgather_bine_permute_static);
-  CHECK_STR(algorithm, "bine_send_static_over", allgather_bine_send_static);
-  CHECK_STR(algorithm, "bine_permute_remap_over", allgather_bine_permute_remap);
   CHECK_STR(algorithm, "bine_send_remap_over", allgather_bine_send_remap);
   CHECK_STR(algorithm, "bine_2_blocks_over", allgather_bine_2_blocks);
   CHECK_STR(algorithm, "bine_2_blocks_dtype_over", allgather_bine_2_blocks_dtype);
@@ -183,8 +180,6 @@ static inline bcast_func_ptr get_bcast_function(const char *algorithm) {
   CHECK_STR(algorithm, "bine_lat_reversed_over", bcast_bine_lat_reversed);
   CHECK_STR(algorithm, "bine_lat_new_over", bcast_bine_lat_new);
   CHECK_STR(algorithm, "bine_lat_i_new_over", bcast_bine_lat_i_new);
-  CHECK_STR(algorithm, "bine_bdw_static_over", bcast_bine_bdw_static);
-  // CHECK_STR(algorithm, "bine_bdw_static_reversed_over", bcast_bine_bdw_static_reversed);
   CHECK_STR(algorithm, "bine_bdw_remap_over", bcast_bine_bdw_remap);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Bcast");
@@ -249,7 +244,6 @@ static inline reduce_scatter_func_ptr get_reduce_scatter_function (const char *a
   CHECK_STR(algorithm, "recursive_distance_doubling_over", reduce_scatter_recursive_distance_doubling);
   CHECK_STR(algorithm, "ring_over", reduce_scatter_ring);
   CHECK_STR(algorithm, "butterfly_over", reduce_scatter_butterfly);
-  CHECK_STR(algorithm, "bine_static_over", reduce_scatter_bine_static);
   CHECK_STR(algorithm, "bine_send_remap_over", reduce_scatter_bine_send_remap);
   CHECK_STR(algorithm, "bine_permute_remap_over", reduce_scatter_bine_permute_remap);  
   CHECK_STR(algorithm, "bine_block_by_block_over", reduce_scatter_bine_block_by_block);

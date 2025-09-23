@@ -1,6 +1,6 @@
 {
   "bine_over": {
-    "desc": "Libbine external alltoall algorithm. This algorithm is used for small to medium messages",
+    "desc": "picolib external alltoall algorithm. This algorithm is used for small to medium messages",
     "version": "1.0.0",
     "constraints": [
       {

@@ -1,6 +1,6 @@
 {
   "bine_over": {
-    "desc": "Libbine external bine algorithm.",
+    "desc": "picolib external bine algorithm.",
     "version": "1.0.0",
     "constraints": [
       {

@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <limits.h>
 
-#include "libbine.h"
-#include "libbine_utils.h"
+#include "picolib.h"
+#include "picolib_utils.h"
 
 int scatter_bine(const void *sendbuf, size_t sendcount, MPI_Datatype dt,
                   void *recvbuf, size_t recvcount, MPI_Datatype recvtype, int root, MPI_Comm comm)

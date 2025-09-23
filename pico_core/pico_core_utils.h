@@ -16,7 +16,7 @@
 #endif
 
 #include "pico_mpi_nccl_mapper.h"
-#include "libbine.h"
+#include "picolib.h"
 
 #if defined(__GNUC__) || defined(__clang__)
   #define PICO_CORE_UNLIKELY(x) __builtin_expect(!!(x), 0)

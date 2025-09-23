@@ -1,6 +1,6 @@
 {
   "k_bruck_over": {
-    "desc": "Libbine external K-nomial Bruck algorithm. It requires an additional parameter `radix`. This algorithm is used for medium to large messages",
+    "desc": "picolib external K-nomial Bruck algorithm. It requires an additional parameter `radix`. This algorithm is used for medium to large messages",
     "version": "1.0.0",
     "constraints": [
       {
@@ -29,7 +29,7 @@
     ]
   },
   "recursive_doubling_over": {
-    "desc": "Libbine external recursive doubling algorithm. Works only on power of 2 processes. Comm_sz must be greater or equal to count.",
+    "desc": "picolib external recursive doubling algorithm. Works only on power of 2 processes. Comm_sz must be greater or equal to count.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -59,7 +59,7 @@
     ]
   },
   "ring_over": {
-    "desc": "Libbine external ring algorithm. This algorithm is used for large messages. Comm_sz must be greater or equal to count.",
+    "desc": "picolib external ring algorithm. This algorithm is used for large messages. Comm_sz must be greater or equal to count.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -80,7 +80,7 @@
     ]
   },
   "sparbit_over": {
-    "desc": "Libbine external sparse bit algorithm. Comm_sz must be greater or equal to count.",
+    "desc": "picolib external sparse bit algorithm. Comm_sz must be greater or equal to count.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -100,7 +100,7 @@
     ]
   },
   "bine_block_by_block_over": {
-    "desc": "Libbine external bine block by block algorithm. Works only for power of 2 processes",
+    "desc": "picolib external bine block by block algorithm. Works only for power of 2 processes",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -131,7 +131,7 @@
     ]
   },
   "bine_block_by_block_over_any_even": {
-    "desc": "Libbine external bine block by block algorithm. Works for any number of even processes",
+    "desc": "picolib external bine block by block algorithm. Works for any number of even processes",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -161,116 +161,8 @@
       "external"
     ]
   },
-  "bine_permute_static_over": {
-    "desc": "Libbine external bine static algorithm. Works only for power of 2 processes, less or equal to 256. Comm_sz must be greater or equal to count. This version uses a memcpy at the end of the send/recv operation to order the buffer for the remapping of the ranks (send contiguous buffers).",
-    "version": "1.0.0",
-    "selection": "pico",
-    "constraints": [
-      {
-        "key": "count",
-        "conditions": [
-          {
-            "operator": ">=",
-            "value": "comm_sz"
-          }
-        ]
-      },
-      {
-        "key": "comm_sz",
-        "conditions": [
-          {
-            "operator": "is_power_of_two",
-            "value": true
-          },
-          {
-            "operator": "<=",
-            "value": 256
-          }
-        ]
-      }
-    ],
-    "tags": [
-      "bine_static",
-      "bine",
-      "permute",
-      "static",
-      "suboptimal",
-      "external"
-    ]
-  },
-  "bine_send_static_over": {
-    "desc": "Libbine external bine static algorithm. Works only for power of 2 processes, less or equal to 256. Comm_sz must be greater or equal to count. This version uses an additional send to the first step to order the buffer for the remapping of the ranks (send contiguous buffers).",
-    "version": "1.0.0",
-    "selection": "pico",
-    "constraints": [
-      {
-        "key": "count",
-        "conditions": [
-          {
-            "operator": ">=",
-            "value": "comm_sz"
-          }
-        ]
-      },
-      {
-        "key": "comm_sz",
-        "conditions": [
-          {
-            "operator": "is_power_of_two",
-            "value": true
-          },
-          {
-            "operator": "<=",
-            "value": 256
-          }
-        ]
-      }
-    ],
-    "tags": [
-      "bine_static",
-      "bine",
-      "static",
-      "suboptimal",
-      "external"
-    ]
-  },
-  "bine_permute_remap_over": {
-    "desc": "Libbine external bine remap algorithm. Works only for power of 2 processes less or equal to 256. This version remaps rank to allow the sending of contiguous buffers. Count must be greater or equal to comm_sz.",
-    "version": "1.0.0",
-    "selection": "pico",
-    "constraints": [
-      {
-        "key": "comm_sz",
-        "conditions": [
-          {
-            "operator": "is_power_of_two",
-            "value": true
-          },
-          {
-            "operator": "<=",
-            "value": 256
-          }
-        ]
-      },
-      {
-        "key": "count",
-        "conditions": [
-          {
-            "operator": ">=",
-            "value": "comm_sz"
-          }
-        ]
-      }
-    ],
-    "tags": [
-      "bine_remap",
-      "permute",
-      "bine",
-      "external"
-    ]
-  },
   "bine_send_remap_over": {
-    "desc": "Libbine external bine remap algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. This version remaps rank to allow the sending of contiguous buffers.",
+    "desc": "picolib external bine remap algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. This version remaps rank to allow the sending of contiguous buffers.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -300,7 +192,7 @@
     ]
   },
   "bine_2_blocks_over": {
-    "desc": "Libbine external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with one possible additional communication.",
+    "desc": "picolib external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with one possible additional communication.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -330,7 +222,7 @@
     ]
   },
   "bine_2_blocks_dtype_over": {
-    "desc": "Libbine external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with derived datatypes.",
+    "desc": "picolib external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with derived datatypes.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [

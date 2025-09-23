@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := all
 
-.PHONY: all clean libbine pico_core
+.PHONY: all clean picolib pico_core
 
 CFLAGS_COMMON = -O3 -Wall -I$(PICO_DIR)/include -MMD -MP
 
@@ -9,13 +9,13 @@ ifeq ($(DEBUG),1)
 endif
 export CFLAGS_COMMON
 
-all: libbine pico_core
+all: picolib pico_core
 
-libbine:
-	@echo -e "$(BLUE)[BUILD] Compiling libbine static library...$(NC)"
-	$(MAKE) -C libbine $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(PICO_MPI_CUDA_AWARE),PICO_MPI_CUDA_AWARE=$(PICO_MPI_CUDA_AWARE))
+picolib:
+	@echo -e "$(BLUE)[BUILD] Compiling picolib static library...$(NC)"
+	$(MAKE) -C picolib $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(PICO_MPI_CUDA_AWARE),PICO_MPI_CUDA_AWARE=$(PICO_MPI_CUDA_AWARE))
 
-pico_core: libbine
+pico_core: picolib
 	@echo -e "$(BLUE)[BUILD] Compiling pico_core executable...$(NC)"
 	$(MAKE) -C pico_core $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(PICO_MPI_CUDA_AWARE),PICO_MPI_CUDA_AWARE=$(PICO_MPI_CUDA_AWARE))
 

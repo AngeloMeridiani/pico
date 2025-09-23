@@ -475,7 +475,7 @@ def main():
     gpu_lib = df['gpu_lib'].iloc[0]
 
     drop_cols = ['array_dim','nnodes','system','timestamp','test_id','MPI_Op',
-                 'notes','mpi_lib','mpi_lib_version','libbine_version', 'tasks_per_node']
+                 'notes','mpi_lib','mpi_lib_version','picolib_version', 'tasks_per_node']
     df.drop(columns=drop_cols, inplace=True)
 
     if args.collective is not None:

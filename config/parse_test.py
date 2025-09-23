@@ -14,7 +14,7 @@ require_cvars = [ "mpich", "cray_mpich"]
 test_config_schema = {
     "type": "object",
     "properties": {
-        "libbine_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+        "picolib_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "collective": {"type": "string", "enum": ["ALLREDUCE", "ALLTOALL", "ALLGATHER", "BCAST", "GATHER", "REDUCE", "REDUCE_SCATTER", "SCATTER"]},
         "MPI_Op": {"type": "string"},
         "tags": {
@@ -36,7 +36,7 @@ test_config_schema = {
             "additionalProperties": False
         }
     },
-    "required": ["libbine_version", "collective", "MPI_Op", "tags", "specific"],
+    "required": ["picolib_version", "collective", "MPI_Op", "tags", "specific"],
     "additionalProperties": False
 }
 
@@ -90,7 +90,7 @@ def check_skip(algo_constraints) -> bool:
 
 
 
-def check_library_dependencies(algo_data, mpi_type, mpi_version, libbine_version) -> bool:
+def check_library_dependencies(algo_data, mpi_type, mpi_version, picolib_version) -> bool:
     """
     Check if the algorithm's library dependencies are met.
 
@@ -103,7 +103,7 @@ def check_library_dependencies(algo_data, mpi_type, mpi_version, libbine_version
 
     library_dependencies = algo_data["library"]
 
-    if "libbine" in library_dependencies and version.parse(library_dependencies["libbine"]) <= version.parse(libbine_version):
+    if "picolib" in library_dependencies and version.parse(library_dependencies["picolib"]) <= version.parse(picolib_version):
         return True
 
     if mpi_type.lower() in library_dependencies and version.parse(library_dependencies[mpi_type.lower()]) <= version.parse(mpi_version):
@@ -116,7 +116,7 @@ def check_library_dependencies(algo_data, mpi_type, mpi_version, libbine_version
 def get_matching_algorithms(algorithm_config, test_config, comm_sz: int, mpi_type: str, mpi_version: str, cuda: str):
     """Get algorithms that match the test configuration."""
     collective = test_config["collective"]
-    libbine_version = test_config["libbine_version"]
+    picolib_version = test_config["picolib_version"]
     include_tags = test_config["tags"]["include"]
     exclude_tags = test_config["tags"]["exclude"]
     include_specific = test_config["specific"]["include"]
@@ -134,7 +134,7 @@ def get_matching_algorithms(algorithm_config, test_config, comm_sz: int, mpi_typ
 
     for algo_name, algo_data in algorithm_config["collective"][collective].items():
         # Check if the algorithm satisfies the library dependencies and comm_sz constraints.
-        if not check_library_dependencies(algo_data, mpi_type, mpi_version, libbine_version):
+        if not check_library_dependencies(algo_data, mpi_type, mpi_version, picolib_version):
             continue
         if "constraints" in algo_data and not check_comm_sz(algo_data["constraints"], comm_sz):
             continue
@@ -194,7 +194,7 @@ def export_environment_variables(matching_algorithms, skip_algorithms, is_segmen
         mpi_op = test_config["MPI_Op"]
     else:
         mpi_op = "null"
-    libbine_version = test_config.get("libbine_version", "")
+    picolib_version = test_config.get("picolib_version", "")
     algo_names = " ".join(matching_algorithms)
     skip_names = " ".join(skip_algorithms)
     segmented = " ".join(is_segmented)
@@ -206,7 +206,7 @@ def export_environment_variables(matching_algorithms, skip_algorithms, is_segmen
             f.write(f"export COLLECTIVE_TYPE='{collective}'\n")
             f.write(f"export ALGOS='{algo_names}'\n")
             f.write(f"export SKIP='{skip_names}'\n")
-            f.write(f"export LIBBINE_VERSION='{libbine_version}'\n")
+            f.write(f"export PICOLIB_VERSION='{picolib_version}'\n")
             f.write(f"export MPI_OP='{mpi_op}'\n")
             f.write(f"export IS_SEGMENTED=({segmented})\n")
             if cvars_str:
