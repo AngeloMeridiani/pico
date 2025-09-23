@@ -1466,7 +1466,7 @@ cleanup_and_return:
 //  return err;
 //}
 
-#ifdef CUDA_AWARE
+#ifdef PICO_MPI_CUDA_AWARE
 // TODO: add allreduce_bine_bdw_hier_gpu
 #endif
 

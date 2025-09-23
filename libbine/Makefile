@@ -13,7 +13,7 @@ LIB_OBJS_CUDA    := $(patsubst %.c, $(LIB_OBJ_DIR_CUDA)/%.o, $(LIB_SRC))
 LIB_DEPS_CUDA    := $(patsubst %.c, $(LIB_OBJ_DIR_CUDA)/%.d, $(LIB_SRC))
 LIBBINE_CUDA     := $(LIB_DIR)/libbine_cuda.a
 
-ifeq ($(CUDA_AWARE),1)
+ifeq ($(PICO_MPI_CUDA_AWARE),1)
 all: $(LIBBINE) $(LIBBINE_CUDA)
 else
 all: $(LIBBINE)
@@ -45,7 +45,7 @@ $(LIBBINE_CUDA): $(LIB_OBJS_CUDA)
 $(LIB_OBJ_DIR_CUDA)/%.o: %.c
 	@mkdir -p $(LIB_OBJ_DIR_CUDA)
 	@echo -e "$(YELLOW)[CC] Compiling $< -> $@...$(NC)"
-	$(PICOCC) $(CFLAGS) -DCUDA_AWARE -ldcudart -c $< -o $@
+	$(PICOCC) $(CFLAGS) -DPICO_MPI_CUDA_AWARE -ldcudart -c $< -o $@
 
 -include $(LIB_DEPS_CUDA)
 

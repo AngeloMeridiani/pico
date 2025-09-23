@@ -19,7 +19,7 @@ ifeq ($(DEBUG),1)
 	CFLAGS := $(filter-out -O%,$(CFLAGS))
 endif
 
-ifeq ($(CUDA_AWARE),1)
+ifeq ($(PICO_MPI_CUDA_AWARE),1)
 all: $(PICO_CORE_CUDA) $(PICO_CORE)
 else
 all: $(PICO_CORE)
@@ -47,7 +47,7 @@ $(PICO_CORE_CUDA): $(PICO_CORE_OBJS_CUDA)
 $(PICO_CORE_OBJ_DIR_CUDA)/%.o: %.c
 	@mkdir -p $(PICO_CORE_OBJ_DIR_CUDA)
 	@echo -e "$(YELLOW)[CC] Compiling $< -> $@...$(NC)"
-	$(PICOCC) $(CFLAGS) -DCUDA_AWARE -lcudart -c $< -o $@
+	$(PICOCC) $(CFLAGS) -DPICO_MPI_CUDA_AWARE -lcudart -c $< -o $@
 
 -include $(PICO_CORE_DEPS_CUDA)
 

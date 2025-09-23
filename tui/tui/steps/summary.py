@@ -8,7 +8,6 @@ import os
 import stat
 import re
 from pathlib import Path
-from time import sleep
 from textual.widgets import Button, Static, Header, Footer, RichLog, Label, Input
 from textual.containers import Horizontal, Vertical
 from textual.app import ComposeResult
@@ -31,10 +30,8 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
     if isinstance(config, (str, Path)):
         with open(config, "r", encoding="utf-8") as f:
             data = json.load(f)
-    elif isinstance(config, dict):
-        data = config
     else:
-        raise TypeError("config must be a dict, str path, or Path")
+        data = config
 
     out_path = Path(sh_path)
     lines: List[str] = []

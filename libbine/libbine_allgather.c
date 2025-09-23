@@ -110,7 +110,7 @@ int allgather_k_bruck(const void *sbuf, size_t scount, MPI_Datatype sdtype,
     /* Compute the temporary buffer size, including datatypes empty gaps */
     rsize = datatype_span(rdtype, (size_t)rcount * (size - rank), &rgap);
     
-#ifdef CUDA_AWARE
+#ifdef PICO_MPI_CUDA_AWARE
     BINE_CUDA_CHECK(cudaMalloc((void**)&tmp_buf, rsize));
     BINE_CUDA_CHECK(cudaMemset(tmp_buf, 0, rsize));
 #else
@@ -1131,7 +1131,7 @@ err_hndl:
 // static inline int permute_blocks(void *buffer, size_t block_size, int *block_permutation, int num_blocks) {
 //
 //   char* tmp_buffer;
-// #ifdef CUDA_AWARE
+// #ifdef PICO_MPI_CUDA_AWARE
 //   BINE_CUDA_CHECK(cudaMalloc((void**)&tmp_buffer, block_size * num_blocks));
 //   BINE_CUDA_CHECK(cudaMemset(tmp_buffer, 0, block_size * num_blocks));
 // #else

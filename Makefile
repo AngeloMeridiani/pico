@@ -13,11 +13,11 @@ all: libbine pico_core
 
 libbine:
 	@echo -e "$(BLUE)[BUILD] Compiling libbine static library...$(NC)"
-	$(MAKE) -C libbine $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(CUDA_AWARE),CUDA_AWARE=$(CUDA_AWARE))
+	$(MAKE) -C libbine $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(PICO_MPI_CUDA_AWARE),PICO_MPI_CUDA_AWARE=$(PICO_MPI_CUDA_AWARE))
 
 pico_core: libbine
 	@echo -e "$(BLUE)[BUILD] Compiling pico_core executable...$(NC)"
-	$(MAKE) -C pico_core $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(CUDA_AWARE),CUDA_AWARE=$(CUDA_AWARE))
+	$(MAKE) -C pico_core $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(PICO_MPI_CUDA_AWARE),PICO_MPI_CUDA_AWARE=$(PICO_MPI_CUDA_AWARE))
 
 clean:
 	@echo -e "${RED}[CLEAN] Cleaning all builds...$(NC)"

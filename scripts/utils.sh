@@ -810,7 +810,7 @@ compile_code() {
     if [[ "$GPU_AWARENESS" == "yes" ]]; then
       case "$GPU_LIB" in
         "CUDA")
-            make_command+=" CUDA_AWARE=1"
+            make_command+=" PICO_MPI_CUDA_AWARE=1"
             ;;
         # "HIP")
         #     make_command+=" HIP_AWARE=1"
@@ -892,7 +892,7 @@ compile_all_libraries_tui() {
         mk+=" PICO_CORE_OBJ_DIR=\"$OUT_OBJ/pico_core\" PICO_CORE_OBJ_DIR_CUDA=\"$OUT_OBJ/pico_core_cuda\""
         mk+=" LIB_OBJ_DIR=\"$OUT_OBJ/lib\" LIB_OBJ_DIR_CUDA=\"$OUT_OBJ/lib_cuda\""
         mk+=" DEBUG=$mk_debug"
-        if (( need_cuda_build )); then mk+=" CUDA_AWARE=1"; fi
+        if (( need_cuda_build )); then mk+=" PICO_MPI_CUDA_AWARE=1"; fi
 
         if [[ "$DEBUG_MODE" == "yes" ]]; then
             echo -e "${BLUE}>>> [lib ${i}] Invoking build${NC}"

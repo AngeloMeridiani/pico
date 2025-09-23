@@ -31,7 +31,7 @@ int gather_allocator(void **sbuf, void **rbuf, void **rbuf_gt, size_t count,
   return 0; // Success
 }
 
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
 
 int gather_allocator_cuda(void **d_sbuf, void **d_rbuf, void **d_rbuf_gt, size_t count,
                              size_t type_size, MPI_Comm comm) {

@@ -10,28 +10,41 @@
 #include <inttypes.h>
 
 #include "pico_core_utils.h"
+#include "pico_mpi_nccl_mapper.h"
 #include "libbine.h"
 
 int main(int argc, char *argv[]) {
   MPI_Init(NULL, NULL);
+
   MPI_Comm comm = MPI_COMM_WORLD;
-  // MPI_Comm inter_comm, intra_comm;
-  MPI_Datatype dtype;
-#ifdef CUDA_AWARE
-  cudaError_t err;
+  int rank, comm_sz, line;
+  MPI_Comm_rank(comm, &rank);
+  MPI_Comm_size(comm, &comm_sz);
+
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   void *d_sbuf = NULL, *d_rbuf = NULL, *d_rbuf_gt = NULL;
-#endif
-  int rank, comm_sz, line, iter;
+#endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
+#ifdef PICO_NCCL
+  ncclComm_t   nccl_comm;
+  cudaStream_t stream;
+  if (pico_nccl_init(comm, rank, comm_sz, &nccl_comm, &stream) == -1) {
+    line = __LINE__;
+    goto err_hndl;
+  }
+#endif // PICO_NCCL
+
+  MPI_Datatype dtype;
+  PICO_DTYPE_T loop_dtype;
+  int iter;
   size_t count, type_size;
   void *sbuf = NULL, *rbuf = NULL, *rbuf_gt = NULL;
   double *times = NULL, *all_times = NULL, *highest = NULL;
   const char *algorithm, *type_string; //, *is_hier = getenv("HIERARCHICAL");
   test_routine_t test_routine;
 
-  MPI_Comm_rank(comm, &rank);
-  MPI_Comm_size(comm, &comm_sz);
 
   // TODO: Continue with hierarchical communicator setup
+  // MPI_Comm inter_comm, intra_comm;
   // if (is_hier == NULL) { line = __LINE__; goto err_hndl; }
   // if (strcmp(is_hier, "yes") == 0) {
   //   if (split_communicator(&inter_comm, &intra_comm) != MPI_SUCCESS) {
@@ -42,7 +55,7 @@ int main(int argc, char *argv[]) {
   // Get test arguments
   if(get_command_line_arguments(argc, argv, &count, &iter, &algorithm, &type_string) == -1 ||
       get_routine (&test_routine, algorithm) == -1 ||
-      get_data_type(type_string, &dtype, &type_size) == -1 ){
+      get_data_type(type_string, &loop_dtype, &dtype, &type_size) == -1 ){
     line = __LINE__;
     goto err_hndl;
   }
@@ -60,12 +73,12 @@ int main(int argc, char *argv[]) {
     goto err_hndl;
   }
 
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   if(test_routine.allocator_cuda(&d_sbuf, &d_rbuf, &d_rbuf_gt, count, type_size, comm) != 0){
     line = __LINE__;
     goto err_hndl;
   }
-#endif // CUDA_AWARE
+#endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
 
   // Allocate memory for buffers independent of collective type
   times = (double *)calloc(iter, sizeof(double));
@@ -94,7 +107,7 @@ int main(int argc, char *argv[]) {
   }
 #endif // DEBUG
 
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   if (coll_memcpy_host_to_device(&d_sbuf, &sbuf, count, type_size, test_routine.collective) != 0){
     line = __LINE__;
     goto err_hndl;
@@ -104,23 +117,27 @@ int main(int argc, char *argv[]) {
   void *tmprbuf = rbuf;
   sbuf = d_sbuf;
   rbuf = d_rbuf;
-#endif
+#endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
 
   // Perform the test based on the collective type and algorithm
   // The test is performed iter times
-  if(test_loop(test_routine, sbuf, rbuf, count, dtype, comm, iter, times) != 0){
+# ifndef PICO_NCCL
+  if(test_loop(test_routine, sbuf, rbuf, count, loop_dtype, comm, iter, times) != 0){
+# else
+  if(test_loop(test_routine, sbuf, rbuf, count, loop_dtype, nccl_comm, stream, iter, times) != 0){
+# endif 
     line = __LINE__;
     goto err_hndl;
   }
 
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   rbuf = tmprbuf;
   sbuf = tmpsbuf;
   if (coll_memcpy_device_to_host(&d_rbuf, &rbuf, count, type_size, test_routine.collective) != 0){
     line = __LINE__;
     goto err_hndl;
   }
-#endif
+#endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
 
   // Check the results against the ground truth
   if(ground_truth_check(test_routine, sbuf, rbuf, rbuf_gt, count, dtype, comm) != 0){
@@ -185,11 +202,17 @@ int main(int argc, char *argv[]) {
     free(highest);
   }
 
-#ifdef CUDA_AWARE
+#ifdef PICO_NCCL
+  if(pico_nccl_finalize(nccl_comm, stream) != 0) {
+    line = __LINE__;
+    goto err_hndl;
+  }
+#endif
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   if(NULL != d_sbuf)    cudaFree(d_sbuf);
   if(NULL != d_rbuf)    cudaFree(d_rbuf);
   if(NULL != d_rbuf_gt) cudaFree(d_rbuf_gt);
-#endif // CUDA_AWARE
+#endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
 
   MPI_Barrier(comm);
 
@@ -211,11 +234,11 @@ err_hndl:
     if(NULL != highest)    free(highest);
   }
 
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   if(NULL != d_sbuf)    cudaFree(d_sbuf);
   if(NULL != d_rbuf)    cudaFree(d_rbuf);
   if(NULL != d_rbuf_gt) cudaFree(d_rbuf_gt);
-#endif // CUDA_AWARE
+#endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
 
   MPI_Abort(comm, MPI_ERR_UNKNOWN);
 

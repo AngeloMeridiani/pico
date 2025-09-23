@@ -8,7 +8,7 @@
 
 #define BINE_MAX_STEPS 20
 
-#ifdef CUDA_AWARE
+#ifdef PICO_MPI_CUDA_AWARE
 #include <cuda_runtime.h>
 #endif
 
@@ -35,7 +35,7 @@
 #define BINE_UNLIKELY(x) (x)
 #endif // defined(__GNUC__) || defined(__clang__)
 
-#ifdef CUDA_AWARE
+#ifdef PICO_MPI_CUDA_AWARE
 #define COPY_BUFF_DIFF_DT(...) copy_buffer_different_dt_cuda(__VA_ARGS__)
 #else
 #define COPY_BUFF_DIFF_DT(...) copy_buffer_different_dt(__VA_ARGS__)
@@ -72,7 +72,7 @@ static int largest_negabinary[BINE_MAX_STEPS] = {0, 1, 1, 5, 5, 21, 21, 85, 85,
 //                                MACRO FOR CUDA FUNCTION CALLS
 // ----------------------------------------------------------------------------------------------
 
-#ifdef CUDA_AWARE
+#ifdef PICO_MPI_CUDA_AWARE
 
 #define BINE_CUDA_CHECK(cmd) do {                         \
   cudaError_t e = cmd;                              \
@@ -109,7 +109,7 @@ static inline int copy_buffer_different_dt_cuda(const void *input_buffer, size_t
   return MPI_SUCCESS;
 }
 
-#endif // CUDA_AWARE
+#endif // PICO_MPI_CUDA_AWARE
 
 
 /**

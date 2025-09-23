@@ -26,7 +26,7 @@ int reduce_scatter_allocator(void **sbuf, void **rbuf, void **rbuf_gt, size_t co
   return 0; // Success
 }
 
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
 
 int reduce_scatter_allocator_cuda(void **d_sbuf, void **d_rbuf, void **d_rbuf_gt, size_t count,
                              size_t type_size, MPI_Comm comm) {
