@@ -3,7 +3,7 @@
 
 #include <mpi.h>
 
-#define PICOLIB_EXCL_MAX_TAGS 
+#define PICOLIB_EXCL_MAX_TAGS 4
 
 /* Returns 0 on success, negative on error. */
 int PICOLIB_EXCL_RESET_ALL(void);                /* Clear all accumulated times, end any open tags. */
