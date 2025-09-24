@@ -10,13 +10,16 @@
 // ----------------------------------------------------------------------------------------------
 //                        PUBLIC API Maros for instrumentation
 // ----------------------------------------------------------------------------------------------
-#define PICO_EXCL_BEGIN(TAG) do {       \
+int picolib_tag_begin(const char *tag);
+int picolib_tag_end(const char *tag);
+
+#define PICO_TAG_BEGIN(TAG) do {       \
   if (picolib_tag_begin((TAG)) != 0) {  \
     return -1;                          \
   }                                     \
 } while (0)
 
-#define PICO_EXCL_END(TAG) do {         \
+#define PICO_TAG_END(TAG) do {         \
   if (picolib_tag_end((TAG)) != 0) {    \
     return -1;                          \
   }                                     \
