@@ -34,7 +34,7 @@ int main(int argc, char *argv[]) {
 #endif // PICO_NCCL
 
   MPI_Datatype dtype;
-  PICO_DTYPE_T loop_dtype;
+  PICO_DTYPE_T loop_dtype; // Used only in test loop, other routines use mpi datatype
   int iter;
   size_t count, type_size;
   void *sbuf = NULL, *rbuf = NULL, *rbuf_gt = NULL;
@@ -42,6 +42,8 @@ int main(int argc, char *argv[]) {
   const char *algorithm, *type_string; //, *is_hier = getenv("HIERARCHICAL");
   test_routine_t test_routine;
 
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+#endif
 
   // TODO: Continue with hierarchical communicator setup
   // MPI_Comm inter_comm, intra_comm;

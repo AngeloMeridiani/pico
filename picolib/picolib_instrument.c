@@ -1,110 +1,165 @@
-#include "picolib_intrument.h"
+/*
+ * Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+ * Licensed under the MIT License
+ */
 #include <string.h>
+#include <stdio.h>
+#include <mpi.h>
+#include "picolib_instrument.h"
 
+// ----------------------------------------------------------------------------------------------
+//                                Internal Data Structures
+// ----------------------------------------------------------------------------------------------
 typedef struct {
-    const char *name;   /* pointer you pass (assumed valid for program lifetime or file-scope string) */
-    double accum;       /* accumulated excluded seconds */
-    double last_start;  /* last MPI_Wtime() when EXCL_BEGIN called */
-    int    depth;       /* nesting depth for this tag */
-    int    in_use;      /* 1 if slot is used */
-} picolib_excl_entry_t;
+  const char  *tag_name;
+  double      accum;
+  double      last_start;
+  int         depth;
+  int         active;
+} picolib_tag_entry_t;
 
-static picolib_excl_entry_t g_tags[PICOLIB_EXCL_MAX_TAGS];
+static picolib_tag_entry_t pico_tags[PICOLIB_MAX_TAGS];
 
+// ----------------------------------------------------------------------------------------------
+//                                Internal Helper Functions
+// ----------------------------------------------------------------------------------------------
 static int _picolib_find_tag(const char *tag) {
-    for (int i = 0; i < PICOLIB_EXCL_MAX_TAGS; ++i) {
-        if (g_tags[i].in_use && strcmp(g_tags[i].name, tag) == 0) return i;
-    }
-    return -1;
+  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+    if (pico_tags[i].active && strcmp(pico_tags[i].tag_name, tag) == 0) 
+      return i;
+  }
+  return -1;
 }
 
 static int _picolib_ensure_tag(const char *tag) {
-    int idx = _picolib_find_tag(tag);
-    if (idx >= 0) return idx;
-    for (int i = 0; i < PICOLIB_EXCL_MAX_TAGS; ++i) {
-        if (!g_tags[i].in_use) {
-            g_tags[i].in_use    = 1;
-            g_tags[i].name      = tag;
-            g_tags[i].accum     = 0.0;
-            g_tags[i].last_start= 0.0;
-            g_tags[i].depth     = 0;
-            return i;
-        }
+  int idx = _picolib_find_tag(tag);
+  if (idx >= 0) return idx;
+  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+    if (!pico_tags[i].active) {
+      pico_tags[i].active     = 1;
+      pico_tags[i].tag_name   = tag;
+      pico_tags[i].accum      = 0.0;
+      pico_tags[i].last_start = 0.0;
+      pico_tags[i].depth      = 0;
+      return i;
     }
-    return -1; /* no space */
+  }
+  return -1;
 }
 
-int PICOLIB_EXCL_RESET_ALL(void) {
-    for (int i = 0; i < PICOLIB_EXCL_MAX_TAGS; ++i) {
-        g_tags[i].in_use = 0;
-        g_tags[i].name   = NULL;
-        g_tags[i].accum  = 0.0;
-        g_tags[i].last_start = 0.0;
-        g_tags[i].depth  = 0;
-    }
-    return 0;
+
+// ----------------------------------------------------------------------------------------------
+//                    Functions behind the PICOLIB_TAG_BEGIN/END macros
+// ----------------------------------------------------------------------------------------------
+int picolib_tag_begin(const char *tag) {
+  if (!tag) {
+    fprintf(stderr, "Error: NULL tag passed to picolib_tag_begin.\n");
+    return -1;
+  }
+  int idx = _picolib_ensure_tag(tag);
+  if (idx < 0) {
+    fprintf(stderr, "Error: Maximum number of tags (%d) exceeded.\n", PICOLIB_MAX_TAGS);
+    return -1;
+  }
+
+  if (pico_tags[idx].depth != 0) {
+    fprintf(stderr, "Error: Tag '%s' was not properly ended before beginning again.\n", tag);
+    return -1;
+  }
+
+  pico_tags[idx].depth++;
+  if (pico_tags[idx].depth != 1) {
+    fprintf(stderr, "Error: Tag '%s' has invalid depth after beginning.\n", tag);
+    return -1;
+  }
+  pico_tags[idx].last_start = MPI_Wtime();
+  return 0;
 }
 
-int PICOLIB_EXCL_CLEAR_ACCUMS(void) {
-    for (int i = 0; i < PICOLIB_EXCL_MAX_TAGS; ++i) {
-        if (g_tags[i].in_use) {
-            g_tags[i].accum = 0.0;
-            /* keep name, depth must be 0 between iterations ideally */
-            if (g_tags[i].depth != 0) {
-                /* If a tag is still open, close it implicitly */
-                g_tags[i].accum += MPI_Wtime() - g_tags[i].last_start;
-                g_tags[i].depth = 0;
-            }
-        }
-    }
-    return 0;
+int picolib_tag_end(const char *tag) {
+  if (!tag) {
+    fprintf(stderr, "Error: NULL tag passed to picolib_tag_begin.\n");
+    return -1;
+  }
+
+  int idx = _picolib_find_tag(tag);
+  if (idx < 0) {
+    fprintf(stderr, "Error: Tag '%s' was not initialized before ending.\n", tag);
+    return -1;
+  }
+
+  if (pico_tags[idx].depth <= 0) {
+    fprintf(stderr, "Error: Tag '%s' was not properly begun before ending.\n", tag);
+    return -1;
+  }
+
+  pico_tags[idx].depth -= 1;
+  if (pico_tags[idx].depth != 0) {
+    fprintf(stderr, "Error: Tag '%s' has invalid depth after ending.\n", tag);
+    return -1;
+  }
+
+  pico_tags[idx].accum += MPI_Wtime() - pico_tags[idx].last_start;
+  return 0;
 }
 
-int PICOLIB_EXCL_BEGIN(const char *tag) {
-    if (!tag) return -2;
-    int idx = _picolib_ensure_tag(tag);
-    if (idx < 0) return -1; /* out of slots */
-    /* Support nesting: only stamp a start time on the transition from depth 0 -> 1 */
-    if (g_tags[idx].depth == 0) {
-        g_tags[idx].last_start = MPI_Wtime();
-    }
-    g_tags[idx].depth += 1;
-    return 0;
+
+// ----------------------------------------------------------------------------------------------
+//                    Functions for managing tags
+// ----------------------------------------------------------------------------------------------
+
+int picolib_count_tags(void) {
+  int n = 0;
+  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+    if (pico_tags[i].active) ++n;
+  }
+  return n;
 }
 
-int PICOLIB_EXCL_END(const char *tag) {
-    if (!tag) return -2;
-    int idx = _picolib_find_tag(tag);
-    if (idx < 0) return -3; /* tag not found */
-    if (g_tags[idx].depth <= 0) return -4; /* unmatched END */
-    g_tags[idx].depth -= 1;
-    if (g_tags[idx].depth == 0) {
-        g_tags[idx].accum += MPI_Wtime() - g_tags[idx].last_start;
-    }
-    return 0;
+void picolib_reset_all_tags(void) {
+  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+    pico_tags[i].tag_name   = NULL;
+    pico_tags[i].accum  = 0.0;
+    pico_tags[i].last_start = 0.0;
+    pico_tags[i].depth = 0;
+    pico_tags[i].active = 0;
+  }
 }
 
-double PICOLIB_EXCL_GET(const char *tag) {
-    int idx = _picolib_find_tag(tag);
-    if (idx < 0) return 0.0;
-    /* If currently open (depth>0), include time up to now without closing */
-    if (g_tags[idx].depth > 0) {
-        return g_tags[idx].accum + (MPI_Wtime() - g_tags[idx].last_start);
+int picolib_get_tag_names(const char **names, int count) {
+  if (names == NULL || count <= 0) {
+    fprintf(stderr, "Error: Invalid arguments to picolib_get_tag_names.\n");
+    return -1;
+  }
+
+  int written = 0;
+  for (int i = 0; i < PICOLIB_MAX_TAGS && written < count; ++i) {
+    if (pico_tags[i].active) {
+      if (pico_tags[i].tag_name == NULL) {
+        fprintf(stderr, "Error: Inconsistent state: active tag with NULL name.\n");
+        return -1;
+      }
+      names[written++] = pico_tags[i].tag_name;
     }
-    return g_tags[idx].accum;
+  }
+
+  if (written != count) {
+    fprintf(stderr, "Error: Mismatch in tag count. Expected %d, found %d.\n", count, written);
+    return -1;
+  }
+  return 0;
 }
 
-int PICOLIB_EXCL_LIST(const char **names, double *values, int max) {
-    int n = 0;
-    for (int i = 0; i < PICOLIB_EXCL_MAX_TAGS && n < max; ++i) {
-        if (g_tags[i].in_use) {
-            names[n]  = g_tags[i].name;
-            /* Include open time as well (non-destructive) */
-            double v = g_tags[i].accum;
-            if (g_tags[i].depth > 0) v += MPI_Wtime() - g_tags[i].last_start;
-            values[n] = v;
-            ++n;
-        }
+int picolib_clear_tags(void) {
+  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+    if (!pico_tags[i].active) continue;
+
+    if (pico_tags[i].depth > 0) {
+      fprintf(stderr, "Error: Tag '%s' was not properly ended before clearing.\n", pico_tags[i].tag_name);
+      return -1;
     }
-    return n;
+    pico_tags[i].accum = 0.0;
+  }
+  return 0;
 }
+

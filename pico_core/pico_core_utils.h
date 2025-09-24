@@ -369,10 +369,10 @@ int are_equal_eps(const void *buf_1, const void *buf_2, size_t count,
  */
 #define GT_CHECK_BUFFER(result, expected, count, dtype, comm)                 \
   do {                                                                        \
-    if(dtype != PICO_DTYPE_DOUBLE && dtype != PICO_DTYPE_FLOAT) {             \
+    if(dtype != MPI_DOUBLE && dtype != MPI_FLOAT) {                           \
       if(memcmp((result), (expected), (count) * type_size) != 0) {            \
         PICO_CORE_DEBUG_PRINT_BUFFERS((result), (expected), (count), (dtype), (comm), (1));  \
-        fprintf(stderr, "Error: results are not valid. Aborting...");       \
+        fprintf(stderr, "Error: results are not valid. Aborting...");         \
         ret = -1;                                                             \
       }                                                                       \
     } else {                                                                  \
