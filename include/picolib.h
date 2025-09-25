@@ -92,4 +92,88 @@ int reduce_scatter_bine_block_by_block_any_even(REDUCE_SCATTER_MPI_ARGS);
 
 int scatter_bine(SCATTER_MPI_ARGS);
 
-#endif
+
+/**
+ * Instrumentation support
+ */
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+#define PICOLIB_MAX_TAGS 32
+
+// ----------------------------------------------------------------------------------------------
+//                        PUBLIC API Maros for instrumentation
+// ----------------------------------------------------------------------------------------------
+int picolib_tag_begin(const char *tag);
+int picolib_tag_end(const char *tag);
+
+#define PICO_TAG_BEGIN(TAG) do {       \
+  if (picolib_tag_begin((TAG)) != 0) {  \
+    return -1;                          \
+  }                                     \
+} while (0)
+
+#define PICO_TAG_END(TAG) do {         \
+  if (picolib_tag_end((TAG)) != 0) {    \
+    return -1;                          \
+  }                                     \
+} while (0)
+
+
+// ----------------------------------------------------------------------------------------------
+//                   Functions for managing tags, used in pico core
+// ----------------------------------------------------------------------------------------------
+/**
+ * @brief Init all tags and bindings to unused state. Pico core call this once 
+ *        at the start of the benchmarking run.
+ */
+void picolib_init_tags(void);
+
+/**
+ * @brief Count of currenly used tags for sizing arrays in pico core
+ *
+ * @return number of tags in use (<= PICOLIB_MAX_TAGS)
+ */
+int picolib_count_tags(void);
+
+/**
+ * @brief Writes the names of the currently used tags into the provided array.
+ *
+ * @param names Array to write the tag names into.
+ * @param max Current number of tags in use (must be retrieved via picolib_count_tags()).
+ *
+ * @return 0 on success, -1 on error.
+ */
+int picolib_get_tag_names(const char **names, int count);
+
+/**
+ * @brief Binds the provided buffers to the currently active tags.
+ *
+ * @param bufs Array of buffers, one for each active tag.
+ * @param k Number of active tags (must be retrieved via picolib_count_tags()).
+ * @param out_len Length of each buffer (must be = benchmaking iter).
+ *
+ * @return 0 on success, -1 on error.
+ */
+int picolib_buiuld_handles(double **bufs, int k, int out_len);
+
+
+/**
+ * @brief Clear all active tag accum and last start values.
+ *
+ * @return 0 on success, -1 on error.
+ */
+int picolib_clear_tags(void);
+
+/**
+ * @brief Store the current accum values of all active tags into the provided buffers.
+ *
+ * @param iter_idx Current benchmarking iteration index.
+ * @param k Number of active tags (must be retrieved via picolib_count_tags()).
+ *
+ * @return 0 on success, -1 on error.
+ */
+int picolib_snapshot_store(int iter_idx, int k);
+
+#endif // PICO_INSTRUMENT
+
+
+#endif // PICOLIB_H
