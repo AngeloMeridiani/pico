@@ -27,5 +27,34 @@
       "bine",
       "external"
     ]
+  },
+  "pairwise_ompi_over": {
+    "desc": "picolib pairwise algorithm, copied from Open MPI.",
+    "version": "1.0.0",
+    "constraints": [
+      {
+        "key": "count",
+        "conditions": [
+          {
+            "operator": ">=",
+            "value": "comm_sz"
+          }
+        ]
+      },
+      {
+        "key": "comm_sz",
+        "conditions": [
+          {
+            "operator": "is_power_of_two",
+            "value": true
+          }
+        ]
+      }
+    ],
+    "selection": "pico",
+    "tags": [
+      "pairwise",
+      "external"
+    ]
   }
 }

@@ -67,6 +67,7 @@ int allgather_bine_send_remap(ALLGATHER_MPI_ARGS);
 int allgather_bine_2_blocks(ALLGATHER_MPI_ARGS);
 int allgather_bine_2_blocks_dtype(ALLGATHER_MPI_ARGS);
 
+int alltoall_pairwise_ompi(ALLTOALL_MPI_ARGS);
 int alltoall_bine(ALLTOALL_MPI_ARGS);
 
 int bcast_scatter_allgather(BCAST_MPI_ARGS);
@@ -96,8 +97,9 @@ int scatter_bine(SCATTER_MPI_ARGS);
 /**
  * Instrumentation support
  */
-#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+#ifndef PICOLIB_MAX_TAGS
 #define PICOLIB_MAX_TAGS 32
+#endif
 
 // ----------------------------------------------------------------------------------------------
 //                        PUBLIC API Maros for instrumentation
@@ -172,8 +174,5 @@ int picolib_clear_tags(void);
  * @return 0 on success, -1 on error.
  */
 int picolib_snapshot_store(int iter_idx, int k);
-
-#endif // PICO_INSTRUMENT
-
 
 #endif // PICOLIB_H

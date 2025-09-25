@@ -7,7 +7,6 @@
 #include <mpi.h>
 #include "picolib.h"
 
-
 #if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
 // ----------------------------------------------------------------------------------------------
 //                                Internal Data Structures
@@ -278,6 +277,40 @@ int picolib_snapshot_store(int iter_idx, int k) {
   return 0;
 }
 
+#else
+
+int picolib_tag_begin(const char *tag) {
+  return 0;
+}
+
+int picolib_tag_end(const char *tag) {
+  return 0;
+}
+
+void picolib_init_tags(void) {
+}
+
+
+int picolib_count_tags(void) {
+  return 0;
+}
+
+int picolib_get_tag_names(const char **names, int count) {
+  return 0;
+}
+
+int picolib_build_handles(double **bufs, int k, int out_len) {
+  return 0;
+}
+
+
+int picolib_clear_tags(void) {
+  return 0;
+}
+
+int picolib_snapshot_store(int iter_idx, int k) {
+  return 0;
+}
 
 #endif // PICO_INSTRUMENT
 

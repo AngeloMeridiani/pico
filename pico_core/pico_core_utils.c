@@ -157,6 +157,7 @@ static inline allgather_func_ptr get_allgather_function(const char *algorithm) {
 static inline alltoall_func_ptr get_alltoall_function(const char *algorithm) {
 #ifndef PICO_NCCL
   CHECK_STR(algorithm, "bine_over", alltoall_bine);
+  CHECK_STR(algorithm, "pairwise_ompi_over", alltoall_pairwise_ompi);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Alltoall");
   return alltoall_wrapper;

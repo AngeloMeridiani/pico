@@ -11,6 +11,59 @@
 #include "picolib.h"
 #include "picolib_utils.h"
 
+
+/* Alltoall pairwise implementation from Open MPI 5.0.1 base module.
+ * Original file: ompi/mca/coll/base/coll_base_alltoall.c
+ * Original function: ompi_coll_base_alltoall_intra_pairwise
+ */
+int alltoall_pairwise_ompi(const void *sbuf, size_t scount, MPI_Datatype sdtype, 
+                           void* rbuf, size_t rcount, MPI_Datatype rdtype, MPI_Comm comm)
+{
+  int line = -1, err = 0, rank, size, step, sendto, recvfrom;
+  void * tmpsend, *tmprecv;
+  ptrdiff_t lb, sext, rext;
+
+  if (MPI_IN_PLACE == sbuf) {
+    err = MPI_ERR_ARG;
+    line = __LINE__;
+    goto err_hndl;
+  }
+
+  MPI_Comm_rank (comm, &rank);
+  MPI_Comm_size (comm, &size);
+
+  err = MPI_Type_get_extent(sdtype, &lb, &sext);
+  if (err != MPI_SUCCESS) { line = __LINE__; goto err_hndl; }
+  err = MPI_Type_get_extent(rdtype, &lb, &rext);
+  if (err != MPI_SUCCESS) { line = __LINE__; goto err_hndl; }
+
+
+  /* Perform pairwise exchange - starting from 1 so the local copy is last */
+  for (step = 1; step < size + 1; step++) {
+
+    /* Determine sender and receiver for this step. */
+    sendto  = (rank + step) % size;
+    recvfrom = (rank + size - step) % size;
+
+    /* Determine sending and receiving locations */
+    tmpsend = (char*)sbuf + (ptrdiff_t)sendto * sext * (ptrdiff_t)scount;
+    tmprecv = (char*)rbuf + (ptrdiff_t)recvfrom * rext * (ptrdiff_t)rcount;
+
+    /* send and receive */
+    err = MPI_Sendrecv(tmpsend, scount, sdtype, sendto, 0,
+                       tmprecv, rcount, rdtype, recvfrom, 0,
+                       comm, MPI_STATUS_IGNORE);
+    if (err != MPI_SUCCESS) { line = __LINE__; goto err_hndl;  }
+  }
+
+  return MPI_SUCCESS;
+
+ err_hndl:
+  fprintf(stderr, "\n%s:%4d\tRank %d Error occurred %d\n\n", __FILE__, line, rank, err);
+  (void)line;  // silence compiler warning
+  return err;
+}
+
 int alltoall_bine(const void *sendbuf, size_t s_count, MPI_Datatype s_dtype,
                    void *recvbuf, size_t r_count, MPI_Datatype r_dtype, MPI_Comm comm)
 {
