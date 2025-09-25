@@ -112,7 +112,7 @@ int picolib_tag_end(const char *tag) {
 
   if (pico_tags[idx].depth <= 0) {
     fprintf(stderr, "Error: Tag '%s' was not properly begun before ending.\n", tag);
-    return-1;
+    return -1;
   }
 
   pico_tags[idx].depth -= 1;
@@ -229,7 +229,14 @@ int picolib_build_handles(double **bufs, int k, int out_len) {
     fprintf(stderr, "Error: Mismatch in tag count. Expected %d, found %d.\n", k, seen);
     return -1;
   }
+
   picolib_handles_built = k;
+  for (int i = k; i < PICOLIB_MAX_TAGS; ++i) {
+    pico_handles[i].tag     = NULL;
+    pico_handles[i].out_buf = NULL;
+    pico_handles[i].out_len = 0;
+  }
+
   return 0;
 }
 
@@ -305,8 +312,6 @@ int picolib_get_tag_names(const char **names, int count) {
 int picolib_build_handles(double **bufs, int k, int out_len) {
   return 0;
 }
-
-int picolib_get_handles_built(void) { return 0; }
 
 int picolib_clear_tags(void) {
   return 0;
