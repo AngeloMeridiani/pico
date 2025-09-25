@@ -6,8 +6,8 @@
 * Controlled via two macros:
 
   ```c
-  PICO_EXCL_BEGIN("tag");
-  PICO_EXCL_END("tag");
+  PICO_TAG_BEGIN("tag");
+  PICO_TAG_END("tag");
   ```
 * Enabled only when building with:
 
@@ -76,7 +76,7 @@ int alltoall_pairwise_ompi(const void *sbuf, size_t scount, MPI_Datatype sdtype,
 
 * Nesting is **allowed**: you may call `PICO_TAG_BEGIN("tag")` multiple times.
 * Time is accumulated until the outermost `PICO_TAG_END("tag")`.
-* **Important:** when leaving the collective, every `PICO_EXCL_BEGIN` must be matched with the same number of `PICO_EXCL_END` → depth must be 0.
+* **Important:** when leaving the collective, every `PICO_TAG_BEGIN` must be matched with the same number of `PICO_TAG_END` → depth must be 0.
 * **Allowed:**
 
   ```c
