@@ -522,6 +522,60 @@ int coll_memcpy_device_to_host(void** d_buf, void** buf, size_t count, size_t ty
 }
 #endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
 
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+int run_coll_once(test_routine_t test_routine, void *sbuf, void *rbuf,
+                   size_t count, MPI_Datatype dtype, MPI_Comm comm){
+  int rank, comm_sz, ret, *rcounts = NULL;
+
+  MPI_Comm_rank(comm, &rank);
+  MPI_Comm_size(comm, &comm_sz);
+
+  size_t local_count = count / (size_t) comm_sz; /**< Rank count for collectives with distributed data */
+
+  switch (test_routine.collective){
+    case ALLREDUCE:
+      ret = test_routine.function.allreduce(sbuf, rbuf, count, dtype, MPI_SUM, comm);
+      break;
+    case ALLGATHER:
+      ret = test_routine.function.allgather(sbuf, local_count, dtype,
+                            rbuf, local_count, dtype, comm);
+      break;
+    case ALLTOALL:
+      ret = test_routine.function.alltoall(sbuf, local_count, dtype,
+                           rbuf, local_count, dtype, comm);
+      
+    break;
+    case BCAST:
+      ret = test_routine.function.bcast(sbuf, count, dtype, 0, comm);
+      break;
+    case GATHER:
+      ret = test_routine.function.gather(sbuf, local_count, dtype,
+                         rbuf, local_count, dtype, 0, comm);
+    
+      break;
+    case REDUCE:
+      ret = test_routine.function.reduce(sbuf, rbuf, count, dtype, MPI_SUM, 0, comm);
+      break;
+    case REDUCE_SCATTER:
+      rcounts = (int *)malloc(comm_sz * sizeof(int));
+      for(int i = 0; i < comm_sz; i++) { rcounts[i] = local_count; }
+      ret = test_routine.function.reduce_scatter(sbuf, rbuf, rcounts, dtype, MPI_SUM, comm);
+      free(rcounts);
+      break;
+    case SCATTER:
+      ret = test_routine.function.scatter(sbuf, local_count, dtype,
+                          rbuf, local_count, dtype, 0, comm);
+      break;
+    default:
+      fprintf(stderr, "still not implemented, aborting...");
+      return -1;
+  }
+  return ret;
+
+}
+#endif
+
+
 #ifndef PICO_NCCL
 int test_loop(test_routine_t test_routine, void *sbuf, void *rbuf, size_t count,
               MPI_Datatype dtype, MPI_Comm comm, int iter, double *times){

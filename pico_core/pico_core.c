@@ -32,6 +32,11 @@ int main(int argc, char *argv[]) {
     goto err_hndl;
   }
 #endif // PICO_NCCL
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+  extern int num_tags;
+  const char **tag_names = NULL;
+  double** tag_times = NULL;
+#endif
 
   MPI_Datatype dtype;
   PICO_DTYPE_T loop_dtype; // Used only in test loop, other routines use mpi datatype
@@ -108,6 +113,64 @@ int main(int argc, char *argv[]) {
     goto err_hndl;
   }
 #endif // DEBUG
+
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+  picolib_init_tags();
+  if (run_coll_once(test_routine, sbuf, rbuf, count, dtype, comm) != MPI_SUCCESS) {
+    line = __LINE__;
+    goto err_hndl;
+  }
+  num_tags = picolib_count_tags();
+  if (num_tags <= 0) {
+    fprintf(stderr, "Error: No tags were created. Aborting...");
+    line = __LINE__;
+    goto err_hndl;
+  }
+
+  tag_names = malloc(num_tags * sizeof(char *));
+  if (tag_names == NULL) {
+    fprintf(stderr, "Error: Memory allocation failed. Aborting...");
+    line = __LINE__;
+    goto err_hndl;
+  }
+
+  if (picolib_get_tag_names(tag_names, num_tags) != 0) {
+    fprintf(stderr, "Error: Failed to get tag names. Aborting...");
+    line = __LINE__;
+    goto err_hndl;
+  }
+  
+  tag_times = (double **) malloc(num_tags * sizeof(double *));
+  if (tag_times == NULL) {
+    fprintf(stderr, "Error: Memory allocation failed. Aborting...");
+    line = __LINE__;
+    goto err_hndl;
+  }
+
+  tag_times[0] = (double *) calloc(num_tags * iter, sizeof(double));
+  if (tag_times[0] == NULL) {
+    fprintf(stderr, "Error: Memory allocation failed. Aborting...");
+    line = __LINE__;
+    goto err_hndl;
+  }
+
+  for (int i = 1; i < num_tags; i++) {
+    tag_times[i] = tag_times[0] + i * iter;
+  }
+
+  if (picolib_build_handles(tag_times, num_tags, iter) != 0) {
+    fprintf(stderr, "Error: Failed to build handles. Aborting...");
+    line = __LINE__;
+    goto err_hndl;
+  }
+
+  if (picolib_clear_tags() != 0) {
+    fprintf(stderr, "Error: Failed to clear tags. Aborting...");
+    line = __LINE__;
+    goto err_hndl;
+  }
+#endif
+
 
 #if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   if (coll_memcpy_host_to_device(&d_sbuf, &sbuf, count, type_size, test_routine.collective) != 0){
@@ -204,6 +267,12 @@ int main(int argc, char *argv[]) {
     free(highest);
   }
 
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+  free(tag_names);
+  free(tag_times[0]);
+  free(tag_times);
+#endif
+
 #ifdef PICO_NCCL
   if(pico_nccl_finalize(nccl_comm, stream) != 0) {
     line = __LINE__;
@@ -241,6 +310,14 @@ err_hndl:
   if(NULL != d_rbuf)    cudaFree(d_rbuf);
   if(NULL != d_rbuf_gt) cudaFree(d_rbuf_gt);
 #endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
+
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+  if (NULL != tag_names) free(tag_names);
+  if (NULL != tag_times) {
+    if (NULL != tag_times[0]) free(tag_times[0]);
+    free(tag_times);
+  }
+#endif
 
   MPI_Abort(comm, MPI_ERR_UNKNOWN);
 

@@ -29,7 +29,7 @@ typedef struct {
 
 static picolib_tag_t pico_tags[PICOLIB_MAX_TAGS];
 static picolib_tag_handler_t pico_handles[PICOLIB_MAX_TAGS];
-
+static int picolib_handles_built = 0;
 // ----------------------------------------------------------------------------------------------
 //                    Functions behind the PICOLIB_TAG_BEGIN/END macros
 // ----------------------------------------------------------------------------------------------
@@ -159,6 +159,7 @@ static inline void picolib_initialize_all_bindings(void) {
 void picolib_init_tags(void) {
   picolib_initialize_all_tags();
   picolib_initialize_all_bindings();
+  picolib_handles_built = 0;
 }
 
 
@@ -228,6 +229,7 @@ int picolib_build_handles(double **bufs, int k, int out_len) {
     fprintf(stderr, "Error: Mismatch in tag count. Expected %d, found %d.\n", k, seen);
     return -1;
   }
+  picolib_handles_built = k;
   return 0;
 }
 
@@ -246,7 +248,8 @@ int picolib_clear_tags(void) {
   return 0;
 }
 
-int picolib_snapshot_store(int iter_idx, int k) {
+int picolib_snapshot_store(int iter_idx) {
+  int k = picolib_handles_built;
   if (iter_idx < 0 || k <= 0) {
     fprintf(stderr, "Error: Invalid arguments to picolib_snapshot_store (iter_idx=%d, k=%d).\n", iter_idx, k);
     return -1;
@@ -303,12 +306,13 @@ int picolib_build_handles(double **bufs, int k, int out_len) {
   return 0;
 }
 
+int picolib_get_handles_built(void) { return 0; }
 
 int picolib_clear_tags(void) {
   return 0;
 }
 
-int picolib_snapshot_store(int iter_idx, int k) {
+int picolib_snapshot_store(int iter_idx) {
   return 0;
 }
 

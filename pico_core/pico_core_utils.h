@@ -222,6 +222,32 @@ int coll_memcpy_device_to_host(void** d_buf, void** buf, size_t count, size_t ty
 
 #endif
 
+//-----------------------------------------------------------------------------------------------
+//                                TAG INITIALIZATION HELPER
+//-----------------------------------------------------------------------------------------------
+
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+
+/**
+ * @brief Run the selected operation once. Used for tag initialization.
+ *
+ * @return MPI_SUCCESS on success, an MPI_ERR code on error.
+ */
+int run_coll_once(test_routine_t test_routine, void *sbuf, void *rbuf,
+                   size_t count, MPI_Datatype dtype, MPI_Comm comm);
+
+#define PICO_INSTRUMENTATION_CALLS do {                                 \
+  if (picolib_snapshot_store(i) != 0) {                                 \
+    fprintf(stderr, "Error: Failed to store snapshot. Aborting...\n");  \
+    return -1;                                                          \
+  } if (picolib_clear_tags() != 0) {                                    \
+    fprintf(stderr, "Error: Failed to clear tags. Aborting...\n");      \
+    return -1;                                                          \
+  }                                                                     \
+} while(0)
+#else
+#define PICO_INSTRUMENTATION_CALLS
+#endif
 
 //-----------------------------------------------------------------------------------------------
 //                                MAIN PICO_COREMARK LOOP FUNCTIONS
@@ -264,6 +290,7 @@ static inline int OP_NAME##_test_loop(ARGS, int iter, double *times,  \
       fprintf(stderr, "Error: " #OP_NAME " failed: %s", error_string);    \
       return ret;                                                         \
     }                                                                     \
+    PICO_INSTRUMENTATION_CALLS;                                           \
     MPI_Barrier(comm);                                                    \
   }                                                                       \
   return ret;                                                             \

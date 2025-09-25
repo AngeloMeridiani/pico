@@ -97,6 +97,8 @@ int scatter_bine(SCATTER_MPI_ARGS);
 /**
  * Instrumentation support
  */
+#define PICOLIB_TAG_NAME_MAX 32
+
 #ifndef PICOLIB_MAX_TAGS
 #define PICOLIB_MAX_TAGS 32
 #endif
@@ -123,6 +125,7 @@ int picolib_tag_end(const char *tag);
 // ----------------------------------------------------------------------------------------------
 //                   Functions for managing tags, used in pico core
 // ----------------------------------------------------------------------------------------------
+
 /**
  * @brief Init all tags and bindings to unused state. Pico core call this once 
  *        at the start of the benchmarking run.
@@ -155,8 +158,7 @@ int picolib_get_tag_names(const char **names, int count);
  *
  * @return 0 on success, -1 on error.
  */
-int picolib_buiuld_handles(double **bufs, int k, int out_len);
-
+int picolib_build_handles(double **bufs, int k, int out_len);
 
 /**
  * @brief Clear all active tag accum and last start values.
@@ -173,6 +175,6 @@ int picolib_clear_tags(void);
  *
  * @return 0 on success, -1 on error.
  */
-int picolib_snapshot_store(int iter_idx, int k);
+int picolib_snapshot_store(int iter_idx);
 
 #endif // PICOLIB_H
