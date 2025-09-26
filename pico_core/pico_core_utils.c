@@ -107,7 +107,6 @@ static inline allreduce_func_ptr get_allreduce_function(const char *algorithm) {
   CHECK_STR(algorithm, "ring_over", allreduce_ring);
   CHECK_STR(algorithm, "rabenseifner_over", allreduce_rabenseifner);
   CHECK_STR(algorithm, "bine_lat_over", allreduce_bine_lat);
-  CHECK_STR(algorithm, "bine_bdw_static_over", allreduce_bine_bdw_static);
   CHECK_STR(algorithm, "bine_bdw_remap_over", allreduce_bine_bdw_remap);
   CHECK_STR(algorithm, "bine_bdw_remap_segmented_over", allreduce_bine_bdw_remap_segmented);
   CHECK_STR(algorithm, "bine_block_by_block_any_even", allreduce_bine_block_by_block_any_even);
@@ -393,11 +392,23 @@ int get_data_saving_options(test_routine_t *test_routine, size_t count,
     return -1;
   }
 
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
   if (test_routine->segsize != 0) {
-    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%ld_%s.csv", count, algorithm, test_routine->segsize, type_string);
+    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%ld_%s_instrument.csv",
+             count, algorithm, test_routine->segsize, type_string);
   } else {
-    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%s.csv", count, algorithm, type_string);
+    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%s_instrument.csv",
+             count, algorithm, type_string);
   }
+#else
+  if (test_routine->segsize != 0) {
+    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%ld_%s.csv",
+             count, algorithm, test_routine->segsize, type_string);
+  } else {
+    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%s.csv",
+             count, algorithm, type_string);
+  }
+#endif
 
   if(concatenate_path(data_dir, data_filename, test_routine->output_data_file) == -1) {
     fprintf(stderr, "Error: Failed to concatenate path. Aborting...");
@@ -889,6 +900,39 @@ int write_output_to_file(test_routine_t test_routine, double *highest, double *a
       return -1;
   }
 }
+
+
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+int write_instrument_output_to_file(test_routine_t test_routine, double* times,
+                                    double** tag_times, const char** tag_names, int iter){
+  FILE *output_file = fopen(test_routine.output_data_file, "w");
+  if(output_file == NULL) {
+    fprintf(stderr, "Error: Opening file %s for writing", test_routine.output_data_file);
+    return -1;
+  }
+
+  int num_tags = libpico_count_tags();
+
+  fprintf(output_file, "rank0");
+  for(int tag = 0; tag < num_tags; tag++) {
+    fprintf(output_file, ",%s", tag_names[tag]);
+  }
+  fprintf(output_file, "\n");
+
+  for (int i = 0; i < iter; i++) {
+    fprintf(output_file, "%" PRId64, (int64_t)(times[i] * 1e9));
+    for(int tag = 0; tag < num_tags; tag++) {
+      fprintf(output_file, ",%" PRId64, (int64_t)(tag_times[tag][i] * 1e9));
+    }
+    fprintf(output_file, "\n");
+  }
+
+  fclose (output_file);
+
+  return 0;
+}
+
+#endif
 
 int file_not_exists(const char* filename) {
   struct stat buffer;

@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <limits.h>
 
-#include "picolib.h"
-#include "picolib_utils.h"
+#include "libpico.h"
+#include "libpico_utils.h"
 
 
 /* Alltoall pairwise implementation from Open MPI 5.0.1 base module.

@@ -41,7 +41,7 @@ class AlgorithmsStep(StepScreen):
 
                         pico_checks = []
                         if lib.pico_backend:
-                            pico_algos = alg_get_list(str(lib.standard), "PicoLib", coll)
+                            pico_algos = alg_get_list(str(lib.standard), "LibPico", coll)
                             pico_checks = [
                                 Checkbox(
                                     f"({lib.name}) {key} (PICO custom)",
@@ -126,7 +126,7 @@ class AlgorithmsStep(StepScreen):
                     if lib.get_id_name() == lib_id
                 )
 
-                algo_data = alg_get_algo(str(library.standard), str(library.lib_type) if not pico else "PicoLib", coll_str, algo_key )
+                algo_data = alg_get_algo(str(library.standard), str(library.lib_type) if not pico else "LibPico", coll_str, algo_key )
                 if not algo_data:
                     raise ValueError(f"Algorithm {algo_key} not found in {library.lib_type}/{coll_str}.json")
 

@@ -3,8 +3,8 @@
  * Licensed under the MIT License
  */
 
-#ifndef PICOLIB_UTILS_H
-#define PICOLIB_UTILS_H
+#ifndef LIBPICO_UTILS_H
+#define LIBPICO_UTILS_H
 
 #define BINE_MAX_STEPS 20
 
@@ -647,5 +647,5 @@ static inline uint32_t get_nu(uint32_t rank, uint32_t size){
   }
 }
 
-#endif // PICOLIB_UTILS_H
+#endif // LIBPICO_UTILS_H
 

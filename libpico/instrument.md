@@ -16,8 +16,8 @@
   ```
 
   and **not** with `PICO_NCCL` or `PICO_MPI_CUDA_AWARE`.
-* Declarations live in [`include/picolib.h`](../include/picolib.h).
-* Implementation is in `picolib/instrument_collectives.c`.
+* Declarations live in [`include/libpico.h`](../include/libpico.h).
+* Implementation is in `libpico/instrument_collectives.c`.
 
 > See the general build/test README for how to enable the instrumentation flag. Default build behavior is through declarative test files, and
   automation scripts for test orchestration, so the entrypoint for the build should always be [`scripts/submit_wrapper.sh`](../scripts/submit_wrapper.sh)
@@ -27,7 +27,7 @@
 
 ## 2. Where to instrument
 
-* Place `PICO_TAG_BEGIN/END` **inside your CPU-only collective implementations** (e.g. the ones inside `picolib_<collective>.c` files).
+* Place `PICO_TAG_BEGIN/END` **inside your CPU-only collective implementations** (e.g. the ones inside `libpico_<collective>.c` files).
 * Do **not** instrument GPU (`NCCL` or CUDA-aware) collectives.
 * The core benchmarking driver (`pico_core`) automatically handles discovery, buffer allocation, clearing, and snapshotting, you only need to annotate your collectives.
 
@@ -37,7 +37,7 @@
 
 ### Minimal example
 
-From `picolib_alltoall.c`, based on Open MPI’s pairwise algorithm:
+From `libpico_alltoall.c`, based on Open MPI’s pairwise algorithm:
 
 ```c
 int alltoall_pairwise_ompi(const void *sbuf, size_t scount, MPI_Datatype sdtype, 
@@ -123,8 +123,8 @@ The library enforces this and errors if tags remain open at snapshot or clear ti
 
 ## 5. Notes
 
-* Maximum number of tags is `PICOLIB_MAX_TAGS` (default: 32).
-  You can change it at compile time with `-DPICOLIB_MAX_TAGS=N`, but this is not recommended unless absolutely needed.
+* Maximum number of tags is `LIBPICO_MAX_TAGS` (default: 32).
+  You can change it at compile time with `-DLIBPICO_MAX_TAGS=N`, but this is not recommended unless absolutely needed.
 * Strings passed to `PICO_TAG_BEGIN/END` must live for the program lifetime (string literals are safe).
 * Instrumentation is meant for **deep dives after normal benchmarking**: run standard benchmarks first, then recompile with `PICO_INSTRUMENT` for fine-grained breakdowns.
 

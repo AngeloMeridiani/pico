@@ -16,7 +16,7 @@
 #endif
 
 #include "pico_mpi_nccl_mapper.h"
-#include "picolib.h"
+#include "libpico.h"
 
 #if defined(__GNUC__) || defined(__clang__)
   #define PICO_CORE_UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -237,10 +237,10 @@ int run_coll_once(test_routine_t test_routine, void *sbuf, void *rbuf,
                    size_t count, MPI_Datatype dtype, MPI_Comm comm);
 
 #define PICO_INSTRUMENTATION_CALLS do {                                 \
-  if (picolib_snapshot_store(i) != 0) {                                 \
+  if (libpico_snapshot_store(i) != 0) {                                 \
     fprintf(stderr, "Error: Failed to store snapshot. Aborting...\n");  \
     return -1;                                                          \
-  } if (picolib_clear_tags() != 0) {                                    \
+  } if (libpico_clear_tags() != 0) {                                    \
     fprintf(stderr, "Error: Failed to clear tags. Aborting...\n");      \
     return -1;                                                          \
   }                                                                     \
@@ -495,6 +495,23 @@ int split_communicator(MPI_Comm *inter_comm, MPI_Comm *intra_comm);
 //-----------------------------------------------------------------------------------------------
 //                                  I/O FUNCTIONS
 //-----------------------------------------------------------------------------------------------
+
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+/**
+ * @brief Writes the instrumentation timing results to a specified output file in CSV format.
+ *
+ * @param test_routine The test routine structure containing the output file path.
+ * @param times An array containing the timing values for each iteration.
+ * @param tag_times A 2D array containing the timing values for each tag across all iterations.
+ * @param tag_names An array of strings containing the names of the tags.
+ * @param iter The number of iterations.
+ *
+ * @return int Returns 0 on success, or -1 if an error occurs.
+ *
+ * @note Time is saved in ns (i.e. 10^-9 s).
+ */
+int write_instrument_output_to_file(test_routine_t test_routine, double* times, double** tag_times, const char** tag_names, int iter);
+#endif
 
 /**
  * @brief Writes the timing results to a specified output file in CSV format.

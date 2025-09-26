@@ -1,21 +1,25 @@
 .DEFAULT_GOAL := all
 
-.PHONY: all clean picolib pico_core
+.PHONY: all clean libpico pico_core
 
 CFLAGS_COMMON = -O3 -Wall -I$(PICO_DIR)/include -MMD -MP
 
 ifeq ($(DEBUG),1)
 	CFLAGS_COMMON += -DDEBUG -g
 endif
+
+ifeq ($(PICO_INSTRUMENT),1)
+	CFLAGS_COMMON += -DPICO_INSTRUMENT
+endif
 export CFLAGS_COMMON
 
-all: picolib pico_core
+all: libpico pico_core
 
-picolib:
-	@echo -e "$(BLUE)[BUILD] Compiling picolib static library...$(NC)"
-	$(MAKE) -C picolib $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(PICO_MPI_CUDA_AWARE),PICO_MPI_CUDA_AWARE=$(PICO_MPI_CUDA_AWARE))
+libpico:
+	@echo -e "$(BLUE)[BUILD] Compiling libpico static library...$(NC)"
+	$(MAKE) -C libpico $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(PICO_MPI_CUDA_AWARE),PICO_MPI_CUDA_AWARE=$(PICO_MPI_CUDA_AWARE))
 
-pico_core: picolib
+pico_core: libpico
 	@echo -e "$(BLUE)[BUILD] Compiling pico_core executable...$(NC)"
 	$(MAKE) -C pico_core $(if $(DEBUG),DEBUG=$(DEBUG)) $(if $(PICO_MPI_CUDA_AWARE),PICO_MPI_CUDA_AWARE=$(PICO_MPI_CUDA_AWARE))
 

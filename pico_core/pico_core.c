@@ -11,7 +11,7 @@
 
 #include "pico_core_utils.h"
 #include "pico_mpi_nccl_mapper.h"
-#include "picolib.h"
+#include "libpico.h"
 
 int main(int argc, char *argv[]) {
   MPI_Init(NULL, NULL);
@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
   }
 #endif // PICO_NCCL
 #if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
-  extern int num_tags;
+  int num_tags;
   const char **tag_names = NULL;
   double** tag_times = NULL;
 #endif
@@ -115,12 +115,12 @@ int main(int argc, char *argv[]) {
 #endif // DEBUG
 
 #if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
-  picolib_init_tags();
+  libpico_init_tags();
   if (run_coll_once(test_routine, sbuf, rbuf, count, dtype, comm) != MPI_SUCCESS) {
     line = __LINE__;
     goto err_hndl;
   }
-  num_tags = picolib_count_tags();
+  num_tags = libpico_count_tags();
   if (num_tags <= 0) {
     fprintf(stderr, "Error: No tags were created. Aborting...");
     line = __LINE__;
@@ -134,7 +134,7 @@ int main(int argc, char *argv[]) {
     goto err_hndl;
   }
 
-  if (picolib_get_tag_names(tag_names, num_tags) != 0) {
+  if (libpico_get_tag_names(tag_names, num_tags) != 0) {
     fprintf(stderr, "Error: Failed to get tag names. Aborting...");
     line = __LINE__;
     goto err_hndl;
@@ -158,13 +158,13 @@ int main(int argc, char *argv[]) {
     tag_times[i] = tag_times[0] + i * iter;
   }
 
-  if (picolib_build_handles(tag_times, num_tags, iter) != 0) {
+  if (libpico_build_handles(tag_times, num_tags, iter) != 0) {
     fprintf(stderr, "Error: Failed to build handles. Aborting...");
     line = __LINE__;
     goto err_hndl;
   }
 
-  if (picolib_clear_tags() != 0) {
+  if (libpico_clear_tags() != 0) {
     fprintf(stderr, "Error: Failed to clear tags. Aborting...");
     line = __LINE__;
     goto err_hndl;
@@ -211,6 +211,8 @@ int main(int argc, char *argv[]) {
   }
 
 #ifndef DEBUG
+
+#if !(defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE)
   // Gather all process times to rank 0 and find the highest execution time of each iteration
   PMPI_Gather(times, iter, MPI_DOUBLE, all_times, iter, MPI_DOUBLE, 0, comm);
 
@@ -224,10 +226,12 @@ int main(int argc, char *argv[]) {
   if (rank == 0) {
     if (bine_allreduce_segsize != 0) {
       printf("-------------------------------------------------------------------------------------------------------------------\n");
-      printf("   %-30s\n    Last Iter Time: %15" PRId64"ns     %10ld elements of %s dtype\t%6d iter\t%8ld segsize\n", algorithm, (int64_t) (highest[iter-1] * 1e9), count, type_string, iter, bine_allreduce_segsize);
+      printf("   %-30s\n    Last Iter Time: %15" PRId64"ns     %10ld elements of %s dtype\t%6d iter\t%8ld segsize\n",
+             algorithm, (int64_t) (highest[iter-1] * 1e9), count, type_string, iter, bine_allreduce_segsize);
     } else {
       printf("-----------------------------------------------------------------------------------------------\n");
-      printf("   %-30s\n    Last Iter Time: %15" PRId64"ns     %10ld elements of %s dtype\t%6d iter\n", algorithm, (int64_t) (highest[iter-1] * 1e9), count, type_string, iter);
+      printf("   %-30s\n    Last Iter Time: %15" PRId64"ns     %10ld elements of %s dtype\t%6d iter\n",
+             algorithm, (int64_t) (highest[iter-1] * 1e9), count, type_string, iter);
     }
   }
   
@@ -254,6 +258,30 @@ int main(int argc, char *argv[]) {
     line = __LINE__;
     goto err_hndl;
   }
+
+
+#else
+  if (rank == 0) {
+    if (bine_allreduce_segsize != 0) {
+      printf("-------------------------------------------------------------------------------------------------------------------\n");
+      printf("   %-30s\n    Last Iter Time: %15" PRId64"ns     %10ld elements of %s dtype\t%6d iter\t%8ld segsize\n",
+             algorithm, (int64_t) (times[iter-1] * 1e9), count, type_string, iter, bine_allreduce_segsize);
+    } else {
+      printf("-----------------------------------------------------------------------------------------------\n");
+      printf("   %-30s\n    Last Iter Time: %15" PRId64"ns     %10ld elements of %s dtype\t%6d iter\n",
+             algorithm, (int64_t) (times[iter-1] * 1e9), count, type_string, iter);
+    }
+    for (int t = 0; t < num_tags; ++t) {
+      printf("%-16s: %12" PRId64 "ns\n", tag_names[t], (int64_t)(tag_times[t][iter-1] * 1e9));
+    }
+
+    if(write_instrument_output_to_file(test_routine, times, tag_times, tag_names, iter) == -1){
+      line = __LINE__;
+      goto err_hndl;
+    }
+  }
+#endif // !(defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE)
+
 #endif // DEBUG
 
   // Clean up

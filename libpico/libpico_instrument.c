@@ -5,7 +5,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <mpi.h>
-#include "picolib.h"
+#include "libpico.h"
 
 #if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
 // ----------------------------------------------------------------------------------------------
@@ -17,21 +17,21 @@ typedef struct {
   double      last_start;
   int         depth;
   int         active;
-} picolib_tag_t;
+} libpico_tag_t;
 
 
 
 typedef struct {
-  picolib_tag_t*  tag;
+  libpico_tag_t*  tag;
   int             out_len;
   double*         out_buf;
-} picolib_tag_handler_t;
+} libpico_tag_handler_t;
 
-static picolib_tag_t pico_tags[PICOLIB_MAX_TAGS];
-static picolib_tag_handler_t pico_handles[PICOLIB_MAX_TAGS];
-static int picolib_handles_built = 0;
+static libpico_tag_t pico_tags[LIBPICO_MAX_TAGS];
+static libpico_tag_handler_t pico_handles[LIBPICO_MAX_TAGS];
+static int libpico_handles_built = 0;
 // ----------------------------------------------------------------------------------------------
-//                    Functions behind the PICOLIB_TAG_BEGIN/END macros
+//                    Functions behind the LIBPICO_TAG_BEGIN/END macros
 // ----------------------------------------------------------------------------------------------
 
 /**
@@ -42,8 +42,8 @@ static int picolib_handles_built = 0;
 *
 * @note This function is not to be called directly.
 */
-static inline int _picolib_find_tag(const char *tag) {
-  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+static inline int _libpico_find_tag(const char *tag) {
+  for (int i = 0; i < LIBPICO_MAX_TAGS; ++i) {
     if (pico_tags[i].active && strcmp(pico_tags[i].tag_name, tag) == 0) 
       return i;
   }
@@ -58,10 +58,10 @@ static inline int _picolib_find_tag(const char *tag) {
  *
  * @note This function is not to be called directly.
  */
-static inline int _picolib_ensure_tag(const char *tag) {
-  int idx = _picolib_find_tag(tag);
+static inline int _libpico_ensure_tag(const char *tag) {
+  int idx = _libpico_find_tag(tag);
   if (idx >= 0) return idx;
-  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+  for (int i = 0; i < LIBPICO_MAX_TAGS; ++i) {
     if (!pico_tags[i].active) {
       pico_tags[i].active     = 1;
       pico_tags[i].tag_name   = tag;
@@ -74,14 +74,14 @@ static inline int _picolib_ensure_tag(const char *tag) {
   return -1;
 }
 
-int picolib_tag_begin(const char *tag) {
+int libpico_tag_begin(const char *tag) {
   if (!tag) {
-    fprintf(stderr, "Error: NULL tag passed to picolib_tag_begin.\n");
+    fprintf(stderr, "Error: NULL tag passed to libpico_tag_begin.\n");
     return -1;
   }
-  int idx = _picolib_ensure_tag(tag);
+  int idx = _libpico_ensure_tag(tag);
   if (idx < 0) {
-    fprintf(stderr, "Error: Maximum number of tags (%d) exceeded.\n", PICOLIB_MAX_TAGS);
+    fprintf(stderr, "Error: Maximum number of tags (%d) exceeded.\n", LIBPICO_MAX_TAGS);
     return -1;
   }
 
@@ -98,13 +98,13 @@ int picolib_tag_begin(const char *tag) {
   return 0;
 }
 
-int picolib_tag_end(const char *tag) {
+int libpico_tag_end(const char *tag) {
   if (!tag) {
-    fprintf(stderr, "Error: NULL tag passed to picolib_tag_end.\n");
+    fprintf(stderr, "Error: NULL tag passed to libpico_tag_end.\n");
     return -1;
   }
 
-  int idx = _picolib_find_tag(tag);
+  int idx = _libpico_find_tag(tag);
   if (idx < 0) {
     fprintf(stderr, "Error: Tag '%s' was not initialized before ending.\n", tag);
     return -1;
@@ -131,10 +131,10 @@ int picolib_tag_end(const char *tag) {
 /**
  * @brief Initialize all tags to unused state.
  *
- * @note This function is not to be called directly; use picolib_init_tags() instead.
+ * @note This function is not to be called directly; use libpico_init_tags() instead.
  */
-static inline void picolib_initialize_all_tags(void) {
-  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+static inline void libpico_initialize_all_tags(void) {
+  for (int i = 0; i < LIBPICO_MAX_TAGS; ++i) {
     pico_tags[i].tag_name   = NULL;
     pico_tags[i].accum  = 0.0;
     pico_tags[i].last_start = 0.0;
@@ -146,39 +146,39 @@ static inline void picolib_initialize_all_tags(void) {
 /**
  * @brief Initialize all bindings to unused state.
  *
- *  @note This function is not to be called directly; use picolib_init_tags() instead.
+ *  @note This function is not to be called directly; use libpico_init_tags() instead.
  */
-static inline void picolib_initialize_all_bindings(void) {
-  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+static inline void libpico_initialize_all_bindings(void) {
+  for (int i = 0; i < LIBPICO_MAX_TAGS; ++i) {
     pico_handles[i].tag     = NULL;
     pico_handles[i].out_len = 0;
     pico_handles[i].out_buf = NULL;
   }
 }
 
-void picolib_init_tags(void) {
-  picolib_initialize_all_tags();
-  picolib_initialize_all_bindings();
-  picolib_handles_built = 0;
+void libpico_init_tags(void) {
+  libpico_initialize_all_tags();
+  libpico_initialize_all_bindings();
+  libpico_handles_built = 0;
 }
 
 
-int picolib_count_tags(void) {
+int libpico_count_tags(void) {
   int n = 0;
-  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+  for (int i = 0; i < LIBPICO_MAX_TAGS; ++i) {
     if (pico_tags[i].active) ++n;
   }
   return n;
 }
 
-int picolib_get_tag_names(const char **names, int count) {
+int libpico_get_tag_names(const char **names, int count) {
   if (names == NULL || count <= 0) {
-    fprintf(stderr, "Error: Invalid arguments to picolib_get_tag_names.\n");
+    fprintf(stderr, "Error: Invalid arguments to libpico_get_tag_names.\n");
     return -1;
   }
 
   int written = 0;
-  for (int i = 0; i < PICOLIB_MAX_TAGS && written < count; ++i) {
+  for (int i = 0; i < LIBPICO_MAX_TAGS && written < count; ++i) {
     if (!pico_tags[i].active) continue;
 
     if (pico_tags[i].tag_name == NULL) {
@@ -195,14 +195,14 @@ int picolib_get_tag_names(const char **names, int count) {
   return 0;
 }
 
-int picolib_build_handles(double **bufs, int k, int out_len) {
+int libpico_build_handles(double **bufs, int k, int out_len) {
   if (!bufs || k <= 0 || out_len <= 0) {
-    fprintf(stderr, "Error: Invalid arguments to picolib_build_handles.\n");
+    fprintf(stderr, "Error: Invalid arguments to libpico_build_handles.\n");
     return -1;
   }
 
   int tag_cnt = 0;
-  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i)
+  for (int i = 0; i < LIBPICO_MAX_TAGS; ++i)
     if (pico_tags[i].active) ++tag_cnt;
 
   if (tag_cnt != k){
@@ -212,7 +212,7 @@ int picolib_build_handles(double **bufs, int k, int out_len) {
   }
 
   int seen = 0;
-  for (int i = 0; i < PICOLIB_MAX_TAGS && seen < k; ++i) {
+  for (int i = 0; i < LIBPICO_MAX_TAGS && seen < k; ++i) {
     if (!pico_tags[i].active) continue;
 
     if (!bufs[seen]){
@@ -230,8 +230,8 @@ int picolib_build_handles(double **bufs, int k, int out_len) {
     return -1;
   }
 
-  picolib_handles_built = k;
-  for (int i = k; i < PICOLIB_MAX_TAGS; ++i) {
+  libpico_handles_built = k;
+  for (int i = k; i < LIBPICO_MAX_TAGS; ++i) {
     pico_handles[i].tag     = NULL;
     pico_handles[i].out_buf = NULL;
     pico_handles[i].out_len = 0;
@@ -241,8 +241,8 @@ int picolib_build_handles(double **bufs, int k, int out_len) {
 }
 
 
-int picolib_clear_tags(void) {
-  for (int i = 0; i < PICOLIB_MAX_TAGS; ++i) {
+int libpico_clear_tags(void) {
+  for (int i = 0; i < LIBPICO_MAX_TAGS; ++i) {
     if (!pico_tags[i].active) continue;
 
     if (pico_tags[i].depth != 0) {
@@ -255,15 +255,15 @@ int picolib_clear_tags(void) {
   return 0;
 }
 
-int picolib_snapshot_store(int iter_idx) {
-  int k = picolib_handles_built;
+int libpico_snapshot_store(int iter_idx) {
+  int k = libpico_handles_built;
   if (iter_idx < 0 || k <= 0) {
-    fprintf(stderr, "Error: Invalid arguments to picolib_snapshot_store (iter_idx=%d, k=%d).\n", iter_idx, k);
+    fprintf(stderr, "Error: Invalid arguments to libpico_snapshot_store (iter_idx=%d, k=%d).\n", iter_idx, k);
     return -1;
   }
 
   for (int i = 0; i < k; ++i) {
-    picolib_tag_t *tag = pico_handles[i].tag;
+    libpico_tag_t *tag = pico_handles[i].tag;
     if (!tag || !tag->active || !pico_handles[i].out_buf) {
       fprintf(stderr, "Error: Invalid handle at index %d.\n", i);
       return -1;
@@ -289,35 +289,35 @@ int picolib_snapshot_store(int iter_idx) {
 
 #else
 
-int picolib_tag_begin(const char *tag) {
+int libpico_tag_begin(const char *tag) {
   return 0;
 }
 
-int picolib_tag_end(const char *tag) {
+int libpico_tag_end(const char *tag) {
   return 0;
 }
 
-void picolib_init_tags(void) {
+void libpico_init_tags(void) {
 }
 
 
-int picolib_count_tags(void) {
+int libpico_count_tags(void) {
   return 0;
 }
 
-int picolib_get_tag_names(const char **names, int count) {
+int libpico_get_tag_names(const char **names, int count) {
   return 0;
 }
 
-int picolib_build_handles(double **bufs, int k, int out_len) {
+int libpico_build_handles(double **bufs, int k, int out_len) {
   return 0;
 }
 
-int picolib_clear_tags(void) {
+int libpico_clear_tags(void) {
   return 0;
 }
 
-int picolib_snapshot_store(int iter_idx) {
+int libpico_snapshot_store(int iter_idx) {
   return 0;
 }
 

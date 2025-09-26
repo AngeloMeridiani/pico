@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <limits.h>
 
-#include "picolib.h"
-#include "picolib_utils.h"
+#include "libpico.h"
+#include "libpico_utils.h"
 
 int reduce_scatter_recursivehalving(const void *sbuf, void *rbuf, const int rcounts[],
                                     MPI_Datatype dtype, MPI_Op op, MPI_Comm comm)

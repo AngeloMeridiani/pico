@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <limits.h>
 
-#include "picolib.h"
-#include "picolib_utils.h"
+#include "libpico.h"
+#include "libpico_utils.h"
 
 size_t bine_allreduce_segsize = 0;
 
@@ -712,6 +712,7 @@ int allreduce_bine_bdw_remap(const void *send_buf, void *recv_buf, size_t count,
     return MPI_ERR_ARG;
   }
 
+  PICO_TAG_BEGIN("mem-move");
   // Allocate temporary buffer for send/recv and reduce operations
   MPI_Type_get_extent(dtype, &lb, &extent);
   MPI_Type_get_true_extent(dtype, &gap, &true_extent);
@@ -725,6 +726,7 @@ int allreduce_bine_bdw_remap(const void *send_buf, void *recv_buf, size_t count,
     err = copy_buffer((char *)send_buf, (char *)recv_buf, count, dtype);
     if(MPI_SUCCESS != err) { goto cleanup_and_return; }
   }
+  PICO_TAG_END("mem-move");
 
   r_index = malloc(sizeof(*r_index) * steps);
   s_index = malloc(sizeof(*s_index) * steps);
@@ -735,11 +737,13 @@ int allreduce_bine_bdw_remap(const void *send_buf, void *recv_buf, size_t count,
     goto cleanup_and_return;
   }
 
+
   w_size = count;
   s_index[0] = r_index[0] = 0;
   vrank = remap_rank((uint32_t) size, (uint32_t) rank);
 
   // Reduce-Scatter phase
+  PICO_TAG_BEGIN("redscat");
   for(step = 0; step < steps; step++) {
     dest = pi(rank, step, size);
     vdest = remap_rank((uint32_t) size, (uint32_t) dest);
@@ -754,13 +758,17 @@ int allreduce_bine_bdw_remap(const void *send_buf, void *recv_buf, size_t count,
       r_index[step] = s_index[step] + s_count[step];
     }
     tmp_send = (char *)recv_buf + s_index[step] * extent;
+    PICO_TAG_BEGIN("sendrecv_rscat");
     err = MPI_Sendrecv(tmp_send, s_count[step], dtype, dest, 0,
                        tmp_buf, r_count[step], dtype, dest, 0,
                        comm, MPI_STATUS_IGNORE);
+    PICO_TAG_END("sendrecv_rscat");
     if(MPI_SUCCESS != err) { goto cleanup_and_return; }
 
     tmp_recv = (char *) recv_buf + r_index[step] * extent;
+    PICO_TAG_BEGIN("reduction");
     MPI_Reduce_local(tmp_buf, tmp_recv, r_count[step], dtype, op);
+    PICO_TAG_END("reduction");
 
     if(step + 1 < steps) {
       r_index[step + 1] = r_index[step];
@@ -768,18 +776,23 @@ int allreduce_bine_bdw_remap(const void *send_buf, void *recv_buf, size_t count,
       w_size = r_count[step];
     }
   }
+  PICO_TAG_END("redscat");
 
   // Allgather phase
+  PICO_TAG_BEGIN("allg");
   for(step = steps - 1; step >= 0; step--) {
     dest = pi(rank, step, size);
 
     tmp_send = (char *)recv_buf + r_index[step] * extent;
     tmp_recv = (char *)recv_buf + s_index[step] * extent;
+    PICO_TAG_BEGIN("sendrecv_allg");
     err = MPI_Sendrecv(tmp_send, r_count[step], dtype, dest, 0,
                        tmp_recv, s_count[step], dtype, dest, 0,
                        comm, MPI_STATUS_IGNORE);
+    PICO_TAG_END("sendrecv_allg");
     if(MPI_SUCCESS != err) { goto cleanup_and_return; }
   }
+  PICO_TAG_END("allg");
 
   free(tmp_buf_raw);
   free(r_index);

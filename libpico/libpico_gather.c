@@ -9,8 +9,8 @@
 #include <limits.h>
 #include <assert.h>
 
-#include "picolib.h"
-#include "picolib_utils.h"
+#include "libpico.h"
+#include "libpico_utils.h"
 
 
 int gather_bine(const void *sendbuf, size_t sendcount, MPI_Datatype dt, void *recvbuf, size_t recvcount, MPI_Datatype recvtype, int root, MPI_Comm comm){

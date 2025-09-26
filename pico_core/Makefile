@@ -29,7 +29,7 @@ endif
 $(PICO_CORE): $(PICO_CORE_OBJS)
 	@mkdir -p $(BIN_DIR)
 	@echo -e "$(GREEN)[LINK] Linking pico_core: $< -> $@$(NC)"
-	$(PICOCC) $(CFLAGS) -o $@ $^ -L$(LIB_DIR) -lbine -lm
+	$(PICOCC) $(CFLAGS) -o $@ $^ -L$(LIB_DIR) -lpico -lm
 
 # Compile source files
 $(PICO_CORE_OBJ_DIR)/%.o: %.c
@@ -42,7 +42,7 @@ $(PICO_CORE_OBJ_DIR)/%.o: %.c
 $(PICO_CORE_CUDA): $(PICO_CORE_OBJS_CUDA)
 	@mkdir -p $(BIN_DIR)
 	@echo -e "$(GREEN)[LINK] Linking pico_core_cuda: $< -> $@$(NC)"
-	$(PICOCC) $(CFLAGS) -o $@ $^ -L$(LIB_DIR) -lbine_cuda -lcudart -lm
+	$(PICOCC) $(CFLAGS) -o $@ $^ -L$(LIB_DIR) -lpico_cuda -lcudart -lm
 
 $(PICO_CORE_OBJ_DIR_CUDA)/%.o: %.c
 	@mkdir -p $(PICO_CORE_OBJ_DIR_CUDA)

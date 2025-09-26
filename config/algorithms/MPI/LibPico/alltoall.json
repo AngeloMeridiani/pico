@@ -1,6 +1,6 @@
 {
   "bine_over": {
-    "desc": "picolib external alltoall algorithm. This algorithm is used for small to medium messages",
+    "desc": "libpico external alltoall algorithm. This algorithm is used for small to medium messages",
     "version": "1.0.0",
     "constraints": [
       {
@@ -29,7 +29,7 @@
     ]
   },
   "pairwise_ompi_over": {
-    "desc": "picolib pairwise algorithm, copied from Open MPI.",
+    "desc": "libpico pairwise algorithm, copied from Open MPI.",
     "version": "1.0.0",
     "constraints": [
       {

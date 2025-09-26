@@ -1,6 +1,6 @@
 {
   "scatter_allgather_over": {
-    "desc": "picolib external scatter allgather algorithm. It consists of a binomial tree scatter followed by a recursive doubling allgather. It requires `count` to be greater than `comm_sz`.",
+    "desc": "libpico external scatter allgather algorithm. It consists of a binomial tree scatter followed by a recursive doubling allgather. It requires `count` to be greater than `comm_sz`.",
     "version": "1.0.0",
     "constraints": [
       {
@@ -21,7 +21,7 @@
     ]
   },
   "bine_lat_over": {
-    "desc": "picolib external bine latency optimal algorithm. This algorithm uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
+    "desc": "libpico external bine latency optimal algorithm. This algorithm uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
     "version": "1.0.0",
     "constraints": [
       {
@@ -52,7 +52,7 @@
     ]
   },
   "bine_lat_reversed_over": {
-    "desc": "picolib external bine latency optimal algorithm with reversed peer selection. This algorithm uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
+    "desc": "libpico external bine latency optimal algorithm with reversed peer selection. This algorithm uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
     "version": "1.0.0",
     "constraints": [
       {
@@ -83,7 +83,7 @@
     ]
   },
   "bine_lat_new_over": {
-    "desc": "New picolib external bine latency optimal algorithm.",
+    "desc": "New libpico external bine latency optimal algorithm.",
     "version": "1.0.0",
     "constraints": [
       {
@@ -105,7 +105,7 @@
     ]
   },
   "bine_lat_i_new_over": {
-    "desc": "New picolib external bine latency optimal algorithm with isend.",
+    "desc": "New libpico external bine latency optimal algorithm with isend.",
     "version": "1.0.0",
     "constraints": [
       {
@@ -127,7 +127,7 @@
     ]
   },
   "bine_bdw_remap_over": {
-    "desc": "picolib external bine bandwidth optimal algorithm. This algorithm is a combination of a bine scatter and a bine allgather.",
+    "desc": "libpico external bine bandwidth optimal algorithm. This algorithm is a combination of a bine scatter and a bine allgather.",
     "version": "1.0.0",
     "constraints": [
       {

@@ -41,6 +41,7 @@ export DEFAULT_OUTPUT_LEVEL="summarized"
 export DEFAULT_COMPRESS="yes"
 export DEFAULT_DELETE="no"
 export DEFAULT_NOTES=""
+export DEFAULT_INSTRUMENT="no"
 
 # Various SLURM options
 export DEFAULT_TEST_TIME="01:00:00"
@@ -807,6 +808,8 @@ activate_virtualenv() {
 compile_code() {
     [[ "$BEAR_COMPILE" == "yes" ]] && make_command="bear -- make all" || make_command="make all" # Used to create compile_command.json file for lsp
     [[ "$DEBUG_MODE" == "yes" ]] && make_command+=" DEBUG=1" ||  make_command+=" -s"
+    [[ "$INSTRUMENT" == "yes" && "$GPU_AWARENESS" != "yes" ]] && make_command+=" PICO_INSTRUMENT=1" && inform "Instrumented build requested"
+
     if [[ "$GPU_AWARENESS" == "yes" ]]; then
       case "$GPU_LIB" in
         "CUDA")
@@ -848,7 +851,9 @@ compile_all_libraries_tui() {
     fi
 
     local mk_debug=0
+    local mk_instr=0
     [[ "$DEBUG_MODE" == "yes" ]] && mk_debug=1
+    [[ "$INSTRUMENT" == "yes" ]] && mk_instr=1
 
     for (( i=0; i<count; i++ )); do
         export_lib_identity "$i"   # sets: MPI_LIB, MPI_LIB_VERSION, PICOCC
@@ -872,6 +877,11 @@ compile_all_libraries_tui() {
         if [[ "$gaw" == "yes" && $any_gpu_nonzero -eq 1 && "$gpu_lib" == "cuda" ]]; then
             need_cuda_build=1
         fi
+        local this_instrument=0
+        if [[ "$mk_instr" -eq 1 && "$any_gpu_nonzero" -eq 0 ]]; then
+            inform "Instrumented build requested for library $i"
+            this_instrument=1
+        fi
 
         # -------- Activate per-lib context (module | set_env | default) --------
         trace_env_snapshot "lib $i BEFORE apply/load"
@@ -892,6 +902,7 @@ compile_all_libraries_tui() {
         mk+=" PICO_CORE_OBJ_DIR=\"$OUT_OBJ/pico_core\" PICO_CORE_OBJ_DIR_CUDA=\"$OUT_OBJ/pico_core_cuda\""
         mk+=" LIB_OBJ_DIR=\"$OUT_OBJ/lib\" LIB_OBJ_DIR_CUDA=\"$OUT_OBJ/lib_cuda\""
         mk+=" DEBUG=$mk_debug"
+        mk+=" PICO_INSTRUMENT=$this_instrument"
         if (( need_cuda_build )); then mk+=" PICO_MPI_CUDA_AWARE=1"; fi
 
         if [[ "$DEBUG_MODE" == "yes" ]]; then

@@ -9,8 +9,8 @@
 #include <limits.h>
 #include <unistd.h>
 
-#include "picolib.h"
-#include "picolib_utils.h"
+#include "libpico.h"
+#include "libpico_utils.h"
 
 
 

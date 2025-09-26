@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <limits.h>
 
-#include "picolib.h"
-#include "picolib_utils.h"
+#include "libpico.h"
+#include "libpico_utils.h"
 
 /*
  * NOTE: Taken from Open MPI base module and rewritten using MPI API for benchmarking

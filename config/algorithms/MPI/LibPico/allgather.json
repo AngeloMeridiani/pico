@@ -1,6 +1,6 @@
 {
   "k_bruck_over": {
-    "desc": "picolib external K-nomial Bruck algorithm. It requires an additional parameter `radix`. This algorithm is used for medium to large messages",
+    "desc": "libpico external K-nomial Bruck algorithm. It requires an additional parameter `radix`. This algorithm is used for medium to large messages",
     "version": "1.0.0",
     "constraints": [
       {
@@ -29,7 +29,7 @@
     ]
   },
   "recursive_doubling_over": {
-    "desc": "picolib external recursive doubling algorithm. Works only on power of 2 processes. Comm_sz must be greater or equal to count.",
+    "desc": "libpico external recursive doubling algorithm. Works only on power of 2 processes. Comm_sz must be greater or equal to count.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -59,7 +59,7 @@
     ]
   },
   "ring_over": {
-    "desc": "picolib external ring algorithm. This algorithm is used for large messages. Comm_sz must be greater or equal to count.",
+    "desc": "libpico external ring algorithm. This algorithm is used for large messages. Comm_sz must be greater or equal to count.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -80,7 +80,7 @@
     ]
   },
   "sparbit_over": {
-    "desc": "picolib external sparse bit algorithm. Comm_sz must be greater or equal to count.",
+    "desc": "libpico external sparse bit algorithm. Comm_sz must be greater or equal to count.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -100,7 +100,7 @@
     ]
   },
   "bine_block_by_block_over": {
-    "desc": "picolib external bine block by block algorithm. Works only for power of 2 processes",
+    "desc": "libpico external bine block by block algorithm. Works only for power of 2 processes",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -131,7 +131,7 @@
     ]
   },
   "bine_block_by_block_over_any_even": {
-    "desc": "picolib external bine block by block algorithm. Works for any number of even processes",
+    "desc": "libpico external bine block by block algorithm. Works for any number of even processes",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -162,7 +162,7 @@
     ]
   },
   "bine_send_remap_over": {
-    "desc": "picolib external bine remap algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. This version remaps rank to allow the sending of contiguous buffers.",
+    "desc": "libpico external bine remap algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. This version remaps rank to allow the sending of contiguous buffers.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -192,7 +192,7 @@
     ]
   },
   "bine_2_blocks_over": {
-    "desc": "picolib external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with one possible additional communication.",
+    "desc": "libpico external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with one possible additional communication.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
@@ -222,7 +222,7 @@
     ]
   },
   "bine_2_blocks_dtype_over": {
-    "desc": "picolib external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with derived datatypes.",
+    "desc": "libpico external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with derived datatypes.",
     "version": "1.0.0",
     "selection": "pico",
     "constraints": [
