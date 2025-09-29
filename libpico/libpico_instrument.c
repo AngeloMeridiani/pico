@@ -2,37 +2,65 @@
  * Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
  * Licensed under the MIT License
  */
-#include <string.h>
-#include <stdio.h>
 #include <mpi.h>
 #include "libpico.h"
 
 #if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
-// ----------------------------------------------------------------------------------------------
-//                                Internal Data Structures
-// ----------------------------------------------------------------------------------------------
+#include <string.h>
+
+// ------------------------------------------------------------------------------------------------
+//                                   INTERNAL DATA STRUCTURES
+// ------------------------------------------------------------------------------------------------
 typedef struct {
-  const char* tag_name;
-  double      accum;
-  double      last_start;
-  int         depth;
-  int         active;
+  const char *tag_name;  /* interned, stable pointer (lifetime = process) */
+  double      accum;     /* accumulated elapsed time while depth==0 */
+  double      last_start;/* last start timestamp (MPI_Wtime) when depth transitions 0->1 */
+  int         depth;     /* re-entrant begin/end depth */
+  int         active;    /* slot in use */
 } libpico_tag_t;
 
-
-
 typedef struct {
-  libpico_tag_t*  tag;
-  int             out_len;
-  double*         out_buf;
+  libpico_tag_t *tag;    /* bound tag */
+  int            out_len;/* length of out_buf */
+  double        *out_buf;/* output buffer (owned by caller) */
 } libpico_tag_handler_t;
 
+// ------------------------------------------------------------------------------------------------
+//                                      STATIC STATE
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Name pool: fixed-size, bump-pointer arena for interned tag strings.
+ * Size is derived from header config (LIBPICO_NAME_POOL_BYTES). Reset in libpico_init_tags().
+ */
+static char   libpico_name_pool[LIBPICO_NAME_POOL_BYTES];
+static size_t libpico_name_pool_off = 0;
+
+/* Tag table and handle table (bounded by LIBPICO_MAX_TAGS). */
 static libpico_tag_t pico_tags[LIBPICO_MAX_TAGS];
 static libpico_tag_handler_t pico_handles[LIBPICO_MAX_TAGS];
 static int libpico_handles_built = 0;
+
 // ----------------------------------------------------------------------------------------------
 //                    Functions behind the LIBPICO_TAG_BEGIN/END macros
 // ----------------------------------------------------------------------------------------------
+
+/**
+ * @brief Intern a string into the name pool.
+ *
+ * @param s The string to intern.
+ * @return A pointer to the interned string, or NULL if the pool is full.
+ *
+ * @note This function is not to be called directly.
+ */
+static inline const char *_libpico_intern(const char *s) {
+  size_t len = strlen(s) + 1;
+  if (len > LIBPICO_NAME_POOL_BYTES - libpico_name_pool_off) return NULL;
+  char *dst = &libpico_name_pool[libpico_name_pool_off];
+  memcpy(dst, s, len);
+  libpico_name_pool_off += len;
+  return dst;
+}
 
 /**
 * @brief Find the index of a tag by name.
@@ -62,17 +90,33 @@ static inline int _libpico_ensure_tag(const char *tag) {
   int idx = _libpico_find_tag(tag);
   if (idx >= 0) return idx;
   for (int i = 0; i < LIBPICO_MAX_TAGS; ++i) {
-    if (!pico_tags[i].active) {
-      pico_tags[i].active     = 1;
-      pico_tags[i].tag_name   = tag;
-      pico_tags[i].accum      = 0.0;
-      pico_tags[i].last_start = 0.0;
-      pico_tags[i].depth      = 0;
-      return i;
-    }
+    if (pico_tags[i].active) continue;
+
+    const char *interned = _libpico_intern(tag);
+    if (!interned) return -1;
+
+    pico_tags[i].active     = 1;
+    pico_tags[i].tag_name   = interned;
+    pico_tags[i].accum      = 0.0;
+    pico_tags[i].last_start = 0.0;
+    pico_tags[i].depth      = 0;
+    return i;
   }
   return -1;
 }
+
+
+// ----------------------------------------------------------------------------------------------
+//                   Tag begin/end functions called by the macros
+// ----------------------------------------------------------------------------------------------
+
+/**
+ * Contract:
+ *  - Tag is created on first use (libpico_ensure_tag).
+ *  - Tag depth is checked for consistency (>=0 before begin, >0 before end).
+ *  - Returns 0 on success, -1 on error (stderr message emitted).
+ *  - Uses MPI_Wtime() only when depth transitions 0->1 (begin) and 1->0 (end).
+ */
 
 int libpico_tag_begin(const char *tag) {
   if (!tag) {
@@ -124,9 +168,8 @@ int libpico_tag_end(const char *tag) {
 
 
 // ----------------------------------------------------------------------------------------------
-//                    Functions for managing tags
+//                    Tag handle management functions (used in pico core)
 // ----------------------------------------------------------------------------------------------
-
 
 /**
  * @brief Initialize all tags to unused state.
@@ -160,6 +203,7 @@ void libpico_init_tags(void) {
   libpico_initialize_all_tags();
   libpico_initialize_all_bindings();
   libpico_handles_built = 0;
+  libpico_name_pool_off = 0;
 }
 
 
@@ -289,37 +333,25 @@ int libpico_snapshot_store(int iter_idx) {
 
 #else
 
-int libpico_tag_begin(const char *tag) {
-  return 0;
-}
+// ----------------------------------------------------------------------------------------------
+//                         Stubs when PICO_INSTRUMENT is not defined
+// ----------------------------------------------------------------------------------------------
 
-int libpico_tag_end(const char *tag) {
-  return 0;
-}
+int libpico_tag_begin(const char *tag) { (void)tag; return 0; }
 
-void libpico_init_tags(void) {
-}
+int libpico_tag_end(const char *tag) { (void)tag; return 0; }
 
+void libpico_init_tags(void) { }
 
-int libpico_count_tags(void) {
-  return 0;
-}
+int libpico_count_tags(void) { return 0; }
 
-int libpico_get_tag_names(const char **names, int count) {
-  return 0;
-}
+int libpico_get_tag_names(const char **names, int count) { if (names || count) {} return 0; }
 
-int libpico_build_handles(double **bufs, int k, int out_len) {
-  return 0;
-}
+int libpico_build_handles(double **bufs, int k, int out_len) { if (bufs || k || out_len) {} return 0; }
 
-int libpico_clear_tags(void) {
-  return 0;
-}
+int libpico_clear_tags(void) { return 0; }
 
-int libpico_snapshot_store(int iter_idx) {
-  return 0;
-}
+int libpico_snapshot_store(int iter_idx) { (void)iter_idx; return 0; }
 
-#endif // PICO_INSTRUMENT
+#endif // PICO_INSTRUMENT && !PICO_NCCL && !PICO_MPI_CUDA_AWARE
 

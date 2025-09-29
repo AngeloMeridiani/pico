@@ -264,15 +264,37 @@ int main(int argc, char *argv[]) {
   if (rank == 0) {
     if (bine_allreduce_segsize != 0) {
       printf("-------------------------------------------------------------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------------------------------------------------------------\n");
       printf("   %-30s\n    Last Iter Time: %15" PRId64"ns     %10ld elements of %s dtype\t%6d iter\t%8ld segsize\n",
              algorithm, (int64_t) (times[iter-1] * 1e9), count, type_string, iter, bine_allreduce_segsize);
     } else {
       printf("-----------------------------------------------------------------------------------------------\n");
+      printf("-----------------------------------------------------------------------------------------------\n");
       printf("   %-30s\n    Last Iter Time: %15" PRId64"ns     %10ld elements of %s dtype\t%6d iter\n",
              algorithm, (int64_t) (times[iter-1] * 1e9), count, type_string, iter);
     }
+    const int name_w = pico_name_col_width(tag_names, num_tags, 20, LIBPICO_TAG_NAME_MAX);
+    const int sep_w  = name_w + 2 + 12 + 2 + 8; /* name + ": " + 12ns + "  " + "xx.x%" */
+    int64_t total_ns = (int64_t)(times[iter-1] * 1e9);
+    if (total_ns < 0) total_ns = 0;
+
+    /* header row */
+
+    for (int i = 0; i < sep_w; ++i) putchar('-');
+    printf("\n%-*s  %12s  %s\n", name_w, "Tag", "Time (ns)", "    %");
+    for (int i = 0; i < sep_w; ++i) putchar('-');
+    putchar('\n');
+
+    /* rows */
     for (int t = 0; t < num_tags; ++t) {
-      printf("%-16s: %12" PRId64 "ns\n", tag_names[t], (int64_t)(tag_times[t][iter-1] * 1e9));
+        int64_t t_ns = (int64_t)(tag_times[t][iter-1] * 1e9);
+        if (t_ns < 0) t_ns = 0;
+        double pct = (total_ns > 0) ? (100.0 * (double)t_ns / (double)total_ns) : 0.0;
+
+        /* tag name truncated to column width if too long */
+        printf("%-*.*s  %12" PRId64 "  %6.1f%%\n",
+               name_w, name_w, tag_names[t],
+               t_ns, pct);
     }
 
     if(write_instrument_output_to_file(test_routine, times, tag_times, tag_names, iter) == -1){

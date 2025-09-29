@@ -743,7 +743,7 @@ int allreduce_bine_bdw_remap(const void *send_buf, void *recv_buf, size_t count,
   vrank = remap_rank((uint32_t) size, (uint32_t) rank);
 
   // Reduce-Scatter phase
-  PICO_TAG_BEGIN("redscat");
+  PICO_TAG_BEGIN("phase:redscat");
   for(step = 0; step < steps; step++) {
     dest = pi(rank, step, size);
     vdest = remap_rank((uint32_t) size, (uint32_t) dest);
@@ -758,17 +758,17 @@ int allreduce_bine_bdw_remap(const void *send_buf, void *recv_buf, size_t count,
       r_index[step] = s_index[step] + s_count[step];
     }
     tmp_send = (char *)recv_buf + s_index[step] * extent;
-    PICO_TAG_BEGIN("sendrecv_rscat");
+    PICO_TAG_BEGIN("sendrecv_rscat", step);
     err = MPI_Sendrecv(tmp_send, s_count[step], dtype, dest, 0,
                        tmp_buf, r_count[step], dtype, dest, 0,
                        comm, MPI_STATUS_IGNORE);
-    PICO_TAG_END("sendrecv_rscat");
+    PICO_TAG_END("sendrecv_rscat", step);
     if(MPI_SUCCESS != err) { goto cleanup_and_return; }
 
     tmp_recv = (char *) recv_buf + r_index[step] * extent;
-    PICO_TAG_BEGIN("reduction");
+    PICO_TAG_BEGIN("reduction", step);
     MPI_Reduce_local(tmp_buf, tmp_recv, r_count[step], dtype, op);
-    PICO_TAG_END("reduction");
+    PICO_TAG_END("reduction", step);
 
     if(step + 1 < steps) {
       r_index[step + 1] = r_index[step];
@@ -776,23 +776,23 @@ int allreduce_bine_bdw_remap(const void *send_buf, void *recv_buf, size_t count,
       w_size = r_count[step];
     }
   }
-  PICO_TAG_END("redscat");
+  PICO_TAG_END("phase:redscat");
 
   // Allgather phase
-  PICO_TAG_BEGIN("allg");
+  PICO_TAG_BEGIN("phase:allgather");
   for(step = steps - 1; step >= 0; step--) {
     dest = pi(rank, step, size);
 
     tmp_send = (char *)recv_buf + r_index[step] * extent;
     tmp_recv = (char *)recv_buf + s_index[step] * extent;
-    PICO_TAG_BEGIN("sendrecv_allg");
+    PICO_TAG_BEGIN("sendrecv_allg", (steps - 1 - step));
     err = MPI_Sendrecv(tmp_send, r_count[step], dtype, dest, 0,
                        tmp_recv, s_count[step], dtype, dest, 0,
                        comm, MPI_STATUS_IGNORE);
-    PICO_TAG_END("sendrecv_allg");
+    PICO_TAG_END("sendrecv_allg", (steps - 1 - step));
     if(MPI_SUCCESS != err) { goto cleanup_and_return; }
   }
-  PICO_TAG_END("allg");
+  PICO_TAG_END("phase:allgather");
 
   free(tmp_buf_raw);
   free(r_index);

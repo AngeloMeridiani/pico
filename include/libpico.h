@@ -6,8 +6,11 @@
 #ifndef LIBPICO_H
 #define LIBPICO_H
 
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+#include <stdio.h>
+#endif
+
 #include <mpi.h>
-#include <stddef.h>
 
 #define ALLREDUCE_MPI_ARGS        const void *sbuf, void *rbuf, size_t count, \
                                   MPI_Datatype dtype, MPI_Op op, MPI_Comm comm
@@ -92,34 +95,107 @@ int reduce_scatter_bine_block_by_block_any_even(REDUCE_SCATTER_MPI_ARGS);
 
 int scatter_bine(SCATTER_MPI_ARGS);
 
-
 /**
  * Instrumentation support
  */
-#define LIBPICO_TAG_NAME_MAX 32
 
+/** Maximum number of distinct active tags that can be created in a run. */
 #ifndef LIBPICO_MAX_TAGS
 #define LIBPICO_MAX_TAGS 32
 #endif
+
+/** Maximum tag name length including the NUL terminator. */
+#ifndef LIBPICO_TAG_NAME_MAX
+#define LIBPICO_TAG_NAME_MAX 32
+#endif
+
+#ifndef LIBPICO_NAME_POOL_BYTES
+#define LIBPICO_NAME_POOL_BYTES (LIBPICO_MAX_TAGS * LIBPICO_TAG_NAME_MAX)
+#endif
+
+/* ---- dispatcher: 1 arg vs 2 args ---- */
+#define _PICO_TAG_PICK(_1,_2,NAME,...) NAME
 
 // ----------------------------------------------------------------------------------------------
 //                        PUBLIC API Maros for instrumentation
 // ----------------------------------------------------------------------------------------------
 
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+
+
+/**
+ * @brief Format "<base>:<idx>" into @p dst without allocating or interning.
+ *        This is a pure formatter for the 2-arg macro path.
+ *
+ * @param dst  Destination buffer.
+ * @param cap  Capacity of @p dst in bytes (must be >= LIBPICO_TAG_NAME_MAX).
+ * @param base Base tag name (may be NULL, treated as "").
+ * @param v    Integer suffix (the 2nd arg of the macro).
+ *
+ * @return The number of characters written (excluding the NUL) on success,
+ *         or -1 if truncated or any snprintf error occurred.
+ *
+ * @note Maximum tag length is limited by LIBPICO_TAG_NAME_MAX (includes NUL).
+ *       If "<base>:<idx>" does not fit, this returns -1 and the macros abort.
+ */
+static inline int libpico_format_tag(char *dst, size_t cap, const char *base, int v) {
+  int n = snprintf(dst, cap, "%s:%d", base ? base : "", v);
+  return (n < 0 || (size_t)n >= cap) ? -1 : n;
+}
+
+/* Back-end calls; return 0 on success, -1 on error. */
 int libpico_tag_begin(const char *tag);
 int libpico_tag_end(const char *tag);
 
-#define PICO_TAG_BEGIN(TAG) do {       \
-  if (libpico_tag_begin((TAG)) != 0) {  \
-    return -1;                          \
-  }                                     \
+/**
+ * PICO_TAG_BEGIN(name) / PICO_TAG_END(name)
+ *   - Start/stop a tag by string name. Tag is created on first use.
+ *
+ * PICO_TAG_BEGIN(name, idx:int) / PICO_TAG_END(name, idx:int)
+ *   - Derived tag form: formats "<name>:<idx>" on a local stack buffer, then
+ *     calls the 1-arg path. The caller must ensure idx is an int (cast if needed).
+ *
+ * Error semantics:
+ *   - On any failure, these macros execute `return -1;` in the CALLER.
+ *     Use only in functions that return int.
+ */
+
+
+/* API macros: expand to 1-arg or 2-arg form */
+#define PICO_TAG_BEGIN(...) _PICO_TAG_PICK(__VA_ARGS__, PICO_TAG_BEGIN2, PICO_TAG_BEGIN1)(__VA_ARGS__)
+#define PICO_TAG_END(...)   _PICO_TAG_PICK(__VA_ARGS__, PICO_TAG_END2,   PICO_TAG_END1  )(__VA_ARGS__)
+
+/* 1-arg forms: pass the provided name through to the backend. */
+#define PICO_TAG_BEGIN1(TAG) do { if (libpico_tag_begin((TAG)) != 0) return -1; } while (0)
+#define PICO_TAG_END1(TAG)   do { if (libpico_tag_end((TAG))   != 0) return -1; } while (0)
+
+/* 2-arg forms: compose "<base>:<int>" on the stack; backend will intern it. */
+#define PICO_TAG_BEGIN2(BASE, IDX) do {                                                     \
+  char _pico_name_[LIBPICO_TAG_NAME_MAX];                                                   \
+  if (libpico_format_tag(_pico_name_, sizeof _pico_name_, (BASE), (int)(IDX)) < 0) {        \
+    fprintf(stderr, "PICO_TAG_BEGIN error: tag too long at %s:%d: PICO_TAG_BEGIN(%s,%d)\n", \
+            __FILE__, __LINE__, (BASE) ? (BASE) : "(null)", (int)(IDX));                    \
+    return -1;                                                                              \
+  }                                                                                         \
+  if (libpico_tag_begin(_pico_name_) != 0) return -1;                                       \
 } while (0)
 
-#define PICO_TAG_END(TAG) do {         \
-  if (libpico_tag_end((TAG)) != 0) {    \
-    return -1;                          \
-  }                                     \
+#define PICO_TAG_END2(BASE, IDX) do {                                                   \
+  char _pico_name_[LIBPICO_TAG_NAME_MAX];                                               \
+  if (libpico_format_tag(_pico_name_, sizeof _pico_name_, (BASE), (int)(IDX)) < 0){     \
+    fprintf(stderr, "PICO_TAG_END error: tag too long at %s:%d: PICO_TAG_END(%s,%d)\n", \
+            __FILE__, __LINE__, (BASE) ? (BASE) : "(null)", (int)(IDX));                \
+    return -1;                                                                          \
+  }                                                                                     \
+  if (libpico_tag_end(_pico_name_) != 0) return -1;                                     \
 } while (0)
+
+#else /* instrumentation disabled: macros are no-ops for zero overhead */
+
+#define PICO_TAG_BEGIN(...) do {} while (0)
+#define PICO_TAG_END(...)   do {} while (0)
+
+#endif
 
 
 // ----------------------------------------------------------------------------------------------

@@ -497,6 +497,17 @@ int split_communicator(MPI_Comm *inter_comm, MPI_Comm *intra_comm);
 //-----------------------------------------------------------------------------------------------
 
 #if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+
+static inline int pico_name_col_width(const char **names, int n, int min_w, int max_w) {
+    int w = min_w;
+    for (int i = 0; i < n; ++i) {
+        int len = (int)strlen(names[i]);
+        if (len > w) w = len;
+    }
+    if (w > max_w) w = max_w;
+    return w;
+}
+
 /**
  * @brief Writes the instrumentation timing results to a specified output file in CSV format.
  *
