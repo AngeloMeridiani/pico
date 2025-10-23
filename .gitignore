@@ -6,6 +6,9 @@ bin/
 obj/
 lib/
 Schedgen/traces/hpc/
+Schedgen/cmdline.c
+Schedgen/cmdline.h
+Schedgen/schedgen
 plot/*/*
 *.err
 *.o

@@ -128,16 +128,34 @@ template <typename T> std::vector<T> make_vector(T x) {
 
 // prototype
 void process_trace(gengetopt_args_info *args_info);
-void create_binomial_tree_bcast_rank(Goal *goal, int root, int comm_rank,
-                                     int comm_size, int datasize);
-void create_binomial_tree_reduce_rank(Goal *goal, int root, int comm_rank,
-                                      int comm_size, int datasize);
-void create_dissemination_rank(Goal *goal, int comm_rank, int comm_size,
-                               int datasize);
-void create_linear_alltoall_rank(Goal *goal, int src_rank, int comm_size,
-                                 int datasize);
-void create_allreduce_recdoub_rank(Goal *goal, int src_rank, int comm_size,
-                                   int datasize);
-void create_allreduce_ring_rank(Goal *goal, int src_rank, int comm_size,
-                                int datasize);
+void create_binomial_tree_bcast_rank(Goal *goal, int root, int comm_rank, int comm_size, int datasize);
+void create_binary_tree_bcast_rank(Goal *goal, int root, int comm_rank, int comm_size, int datasize);
+void create_dissemination_rank(Goal *goal, int comm_rank, int comm_size, int datasize);
+void create_linear_alltoall_rank(Goal *goal, int src_rank, int comm_size, int datasize);
+void create_allreduce_recdoub_rank(Goal *goal, int src_rank, int comm_size, int datasize);
+void create_allreduce_ring_rank(Goal *goal, int src_rank, int comm_size, int datasize);
+
+
+void create_binomial_tree_bcast(gengetopt_args_info *args_info);
+void create_binary_tree_bcast(gengetopt_args_info *args_info);
+void create_binomial_tree_reduce_rank(Goal *goal, int root, int comm_rank, int comm_size, int datasize);
+void create_binomial_tree_reduce(gengetopt_args_info *args_info);
+void create_dissemination(gengetopt_args_info *args_info);
+void create_linbarrier(gengetopt_args_info *args_info);
+void create_nway_dissemination(gengetopt_args_info *args_info);
+void create_pipelined_ring(gengetopt_args_info *args_info);
+void create_pipelined_ring_dep(gengetopt_args_info *args_info);
+void create_double_ring(gengetopt_args_info *args_info);
+void create_gather(gengetopt_args_info *args_info);
+void create_scatter(gengetopt_args_info *args_info);
+void create_random_bisect(gengetopt_args_info *args_info);
+void create_random_bisect_fd_sym(gengetopt_args_info *args_info);
+void create_linear_alltoall(gengetopt_args_info *args_info);
+void create_linear_alltoallv_rank(Goal *goal, int src_rank, int comm_size, std::vector<std::vector<int>> &sizes);
+void create_linear_alltoallv(gengetopt_args_info *args_info);
+void create_allreduce_recdoub(gengetopt_args_info *args_info);
+void create_allreduce_ring(gengetopt_args_info *args_info);
+void create_reduce_scatter_allgather_rank(Goal *goal, int src_rank, int comm_size, int datasize, int replace_comptime);
+void create_resnet152(gengetopt_args_info *args_info);
+void create_chained_dissem(gengetopt_args_info *args_info);
 #endif
