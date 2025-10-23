@@ -114,3 +114,7 @@ Department of Computer Science, Sapienza University of Rome
 > [desensi@di.uniroma1.it](mailto:desensi@di.uniroma1.it)
 > [pasqualoni.1845572@studenti.uniroma1.it](mailto:pasqualoni.1845572@studenti.uniroma1.it)
 
+
+The `Schedgen` component was originally developed by [SPCL @ ETH Zurich](https://spcl.inf.ethz.ch)
+and distributed under the BSD 4-Clause License.
+It has been modified and integrated into this project.
