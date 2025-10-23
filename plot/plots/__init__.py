@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+# Licensed under the MIT License
+
 """
 Concrete plotting helpers.  Each module exposes a single ``generate_*`` function
 that takes a pre-filtered dataframe and renders one figure.

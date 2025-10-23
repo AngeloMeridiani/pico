@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+# Licensed under the MIT License
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -65,7 +68,7 @@ def generate_bar_plot(
         ]
         ax.legend(handles, new_labels, ncol=ncols, loc="lower left", fontsize=20)
 
-    if metadata.nnodes == metadata.mpi_tasks:
+    if metadata.total_nodes == metadata.mpi_tasks:
         title = f"{metadata.system.capitalize()}, {collective.lower().capitalize()}, {metadata.nnodes} nodes"
     else:
         title = (

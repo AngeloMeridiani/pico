@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+# Licensed under the MIT License
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -106,7 +109,7 @@ def generate_line_plot(
     ax.set_xticklabels([format_bytes(x) for x in xticks])
     ax.yaxis.set_major_formatter(format_time_units_ns)
 
-    if metadata.nnodes == metadata.mpi_tasks:
+    if metadata.total_nodes == metadata.mpi_tasks:
         title = f"{metadata.system.capitalize()}, {collective.lower().capitalize()}, {metadata.nnodes} nodes"
     else:
         title = (

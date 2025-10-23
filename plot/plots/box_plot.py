@@ -421,15 +421,20 @@ def generate_boxplot(cfg: BoxplotConfig) -> Path:
     }
 
     plt.figure()
-    sns.boxplot(
+    palette = sns.color_palette("deep", n_colors=df["Collective"].nunique())
+    ax = sns.boxplot(
         data=df,
         y="Collective",
         x="Improvement (%)",
+        hue="Collective",
         showfliers=True,
         showmeans=True,
         meanprops=mean_props,
-        palette=sns.color_palette("deep"),
+        palette=palette,
+        dodge=False,
     )
+    if ax.legend_:
+        ax.legend_.remove()
     plt.ylabel("")
 
     out_dir = cfg.output_dir or (Path("plot") / cfg.system)

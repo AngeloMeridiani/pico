@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+# Licensed under the MIT License
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -114,7 +117,7 @@ def generate_cut_bar_plot(
     ax_bot.set_ylabel("Normalized Mean Execution Time", fontsize=15)
     ax_top.set_ylabel("")
 
-    if metadata.nnodes == metadata.mpi_tasks:
+    if metadata.total_nodes == metadata.mpi_tasks:
         title = f"{metadata.system}, {collective.lower()}, {metadata.nnodes} nodes ({datatype})"
     else:
         title = (

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+# Licensed under the MIT License
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,12 +30,13 @@ def extract_metadata(df: pd.DataFrame) -> PlotMetadata:
     Extract the invariant metadata fields from a summary dataframe.
     """
     row = df.iloc[0]
+    tasks_per_node = row.get("tasks_per_node")
     return PlotMetadata(
         system=row["system"],
         timestamp=row["timestamp"],
         mpi_lib=row["mpi_lib"],
-        nnodes=int(row["nnodes"]),
-        tasks_per_node=int(row["tasks_per_node"]),
+        nnodes=str(row["nnodes"]),
+        tasks_per_node=int(tasks_per_node) if pd.notna(tasks_per_node) else 1,
         gpu_lib=row.get("gpu_lib", "CPU"),
     )
 
@@ -90,7 +94,6 @@ def drop_unused_columns(df: pd.DataFrame) -> pd.DataFrame:
         "notes",
         "mpi_lib",
         "mpi_lib_version",
-        "libpico_version",
         "tasks_per_node",
     ]
     existing = [col for col in drop_cols if col in df.columns]

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+# Licensed under the MIT License
+
 from __future__ import annotations
 
 import os
@@ -218,7 +221,7 @@ def generate_comparison_heatmap(cfg: ComparisonHeatmapConfig) -> Path:
 
     outdir = cfg.output_dir
     if outdir is None:
-        outdir = Path("plot_generic") / cfg.system / "heatmaps" / cfg.collective
+        outdir = Path("plot") / cfg.system / "heatmaps" / cfg.collective
     target_dir = ensure_dir(outdir)
 
     args_parts = [

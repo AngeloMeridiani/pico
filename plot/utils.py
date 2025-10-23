@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+# Licensed under the MIT License
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -140,10 +143,29 @@ class PlotMetadata:
     system: str
     timestamp: str
     mpi_lib: str
-    nnodes: int
+    nnodes: str
     tasks_per_node: int
     gpu_lib: str
 
     @property
+    def total_nodes(self) -> int:
+        value = self.nnodes
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            if "x" in value:
+                product = 1
+                for chunk in value.lower().split("x"):
+                    if not chunk:
+                        continue
+                    product *= int(chunk)
+                return product
+            try:
+                return int(value)
+            except ValueError as exc:
+                raise ValueError(f"Cannot parse nnodes value '{value}'") from exc
+        return int(value)
+
+    @property
     def mpi_tasks(self) -> int:
-        return self.nnodes * self.tasks_per_node
+        return self.total_nodes * self.tasks_per_node
