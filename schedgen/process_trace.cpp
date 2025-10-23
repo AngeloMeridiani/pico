@@ -15,6 +15,8 @@
 #include <math.h>
 #include <stdexcept>
 
+#include "coll/collective_selector.h"
+
 // The init operation of a persistent request
 // takes a certain amount of time, which is artificially
 // increased during tracing, this multiplier is used to
@@ -447,6 +449,69 @@ finish_coll(std::string collname /* the op id */,
   return collop;
 }
 
+struct SelectedAlgorithm {
+  std::string name;
+  CollectiveGenerator generator;
+};
+
+static const char *default_algorithm_for_kind(CollectiveKind kind) {
+  switch (kind) {
+  case CollectiveKind::Barrier:
+    return "dissemination";
+  case CollectiveKind::Allreduce:
+    return "recursive_doubling";
+  case CollectiveKind::Iallreduce:
+    return "dissemination";
+  case CollectiveKind::Bcast:
+    return "binomial";
+  case CollectiveKind::Allgather:
+    return "dissemination";
+  case CollectiveKind::Reduce:
+    return "binomial";
+  case CollectiveKind::Alltoall:
+    return "linear";
+  }
+  return "";
+}
+
+static SelectedAlgorithm resolve_algorithm(CollectiveSelector &selector,
+                                           CollectiveKind kind,
+                                           int comm_size, int msg_size) {
+  const char *fallback = default_algorithm_for_kind(kind);
+  std::string chosen = selector.choose(kind, comm_size, msg_size);
+  if (chosen.empty() && fallback)
+    chosen = fallback;
+  CollectiveGenerator gen;
+  if (!chosen.empty()) {
+    gen = lookup_collective_algorithm(kind, chosen);
+    if (!gen && fallback && chosen != fallback) {
+      chosen = fallback;
+      gen = lookup_collective_algorithm(kind, chosen);
+    }
+  }
+  return {chosen, gen};
+}
+
+static SelectedAlgorithm select_algorithm_or_warn(CollectiveSelector &selector,
+                                                  CollectiveKind kind,
+                                                  int comm_size,
+                                                  int msg_size,
+                                                  const char *label,
+                                                  bool debug) {
+  SelectedAlgorithm selected =
+      resolve_algorithm(selector, kind, comm_size, msg_size);
+  if (!selected.generator) {
+    std::cerr << "[selector] No algorithm available for "
+              << collective_kind_to_string(kind) << " (comm=" << comm_size
+              << ", msg=" << msg_size << ")" << std::endl;
+  } else if (debug) {
+    std::cout << "[selector] " << label << " -> " << selected.name
+              << " (comm=" << comm_size << ", msg=" << msg_size << ")"
+              << std::endl;
+  }
+  return selected;
+}
+
 void process_trace(gengetopt_args_info *args_info) {
 
   if (!args_info->traces_given) {
@@ -486,6 +551,21 @@ void process_trace(gengetopt_args_info *args_info) {
     std::cout << "nbcify propost: " << nbcify << "\n";
 
   Goal goal(args_info, hosts * extrhosts);
+
+  CollectiveSelector selector;
+  selector.load_default_rules();
+  bool selector_debug = args_info->selector_debug_flag;
+  if (args_info->selector_rules_given) {
+    try {
+      if (!selector.load_rules_file(args_info->selector_rules_arg)) {
+        std::cerr << "Could not open selector rules file: "
+                  << args_info->selector_rules_arg << std::endl;
+      }
+    } catch (const std::exception &ex) {
+      std::cerr << "Error while reading selector rules: " << ex.what()
+                << std::endl;
+    }
+  }
 
   /* see if we have a file with start lines for the trace files - one
    * line-index per line and >hosts< lines */
@@ -1280,8 +1360,17 @@ void process_trace(gengetopt_args_info *args_info) {
               goal.Comment("Barrier begin");
             goal.SetTag(MAKE_TAG(comm, (collsbase + nops)));
             goal.StartOp();
-            create_dissemination_rank(&goal, host + hosts * extrhost,
-                                      hosts * extrhosts, 1);
+            CollectiveContext ctx;
+            SelectedAlgorithm selected = select_algorithm_or_warn(
+                selector, CollectiveKind::Barrier, hosts * extrhosts, 1,
+                "barrier", selector_debug);
+            if (selected.generator) {
+              selected.generator(&goal, host + hosts * extrhost,
+                                 hosts * extrhosts, 1, ctx);
+            } else {
+              create_dissemination_rank(&goal, host + hosts * extrhost,
+                                        hosts * extrhosts, 1);
+            }
             std::pair<Goal::locop, Goal::locop> ops = goal.EndOp();
 
             finish_coll("barrier", ops, tstart, tend, nbcify, &curlocop, &goal);
@@ -1328,14 +1417,19 @@ void process_trace(gengetopt_args_info *args_info) {
               goal.Comment("Allreduce begin");
             goal.SetTag(MAKE_TAG(comm, (collsbase + nops)));
             goal.StartOp();
-            // create_dissemination_rank(&goal, host + hosts * extrhost,
-            //                           hosts * extrhosts, count * size);
-            // create_allreduce_ring_rank(&goal, host + hosts * extrhost,
-            //                             hosts * extrhosts, count * size);
-            create_allreduce_recdoub_rank(&goal, host + hosts * extrhost,
-                                          hosts * extrhosts, count * size);
-            /* create_allreduce_recdoub_rank(&goal, host + hosts * extrhost, 
-                                          hosts * extrhosts, count * size, -1); */
+            CollectiveContext ctx;
+            ctx.replace_comp_time = args_info->rpl_dep_cmp_arg;
+            SelectedAlgorithm selected = select_algorithm_or_warn(
+                selector, CollectiveKind::Allreduce, hosts * extrhosts,
+                count * size, "allreduce", selector_debug);
+            if (selected.generator) {
+              selected.generator(&goal, host + hosts * extrhost,
+                                 hosts * extrhosts, count * size, ctx);
+            } else {
+              create_allreduce_recdoub_rank(&goal, host + hosts * extrhost,
+                                            hosts * extrhosts,
+                                            count * size);
+            }
             std::pair<Goal::locop, Goal::locop> ops = goal.EndOp();
 
             finish_coll("allreduce", ops, tstart, tend, nbcify, &curlocop,
@@ -1383,8 +1477,17 @@ void process_trace(gengetopt_args_info *args_info) {
               goal.Comment("Iallreduce begin");
             goal.SetTag(collsbase + nops);
             goal.StartOp();
-            create_dissemination_rank(&goal, host + hosts * extrhost,
-                                      hosts * extrhosts, count * size);
+            CollectiveContext ctx;
+            SelectedAlgorithm selected = select_algorithm_or_warn(
+                selector, CollectiveKind::Iallreduce, hosts * extrhosts,
+                count * size, "iallreduce", selector_debug);
+            if (selected.generator) {
+              selected.generator(&goal, host + hosts * extrhost,
+                                 hosts * extrhosts, count * size, ctx);
+            } else {
+              create_dissemination_rank(&goal, host + hosts * extrhost,
+                                        hosts * extrhosts, count * size);
+            }
             std::pair<Goal::locop, Goal::locop> ops = goal.EndOp();
 
             reqs[req] = finish_coll("iallreduce", ops, tstart, tend, nbcify,
@@ -1433,9 +1536,20 @@ void process_trace(gengetopt_args_info *args_info) {
               goal.Comment("Bcast begin");
             goal.SetTag(MAKE_TAG(comm, (collsbase + nops)));
             goal.StartOp();
-            create_binomial_tree_bcast_rank(&goal, root,
-                                            host + hosts * extrhost,
-                                            hosts * extrhosts, count * size);
+            CollectiveContext ctx;
+            ctx.root = root;
+            SelectedAlgorithm selected = select_algorithm_or_warn(
+                selector, CollectiveKind::Bcast, hosts * extrhosts,
+                count * size, "bcast", selector_debug);
+            if (selected.generator) {
+              selected.generator(&goal, host + hosts * extrhost,
+                                 hosts * extrhosts, count * size, ctx);
+            } else {
+              create_binomial_tree_bcast_rank(&goal, root,
+                                              host + hosts * extrhost,
+                                              hosts * extrhosts,
+                                              count * size);
+            }
             std::pair<Goal::locop, Goal::locop> ops = goal.EndOp();
 
             finish_coll("bcast", ops, tstart, tend, nbcify, &curlocop, &goal);
@@ -1482,8 +1596,17 @@ void process_trace(gengetopt_args_info *args_info) {
               goal.Comment("Allgather begin");
             goal.SetTag(MAKE_TAG(comm, (collsbase + nops)));
             goal.StartOp();
-            create_dissemination_rank(&goal, host + hosts * extrhost,
-                                      hosts * extrhosts, count * size);
+            CollectiveContext ctx;
+            SelectedAlgorithm selected = select_algorithm_or_warn(
+                selector, CollectiveKind::Allgather, hosts * extrhosts,
+                count * size, "allgather", selector_debug);
+            if (selected.generator) {
+              selected.generator(&goal, host + hosts * extrhost,
+                                 hosts * extrhosts, count * size, ctx);
+            } else {
+              create_dissemination_rank(&goal, host + hosts * extrhost,
+                                        hosts * extrhosts, count * size);
+            }
             std::pair<Goal::locop, Goal::locop> ops = goal.EndOp();
 
             finish_coll("allgather", ops, tstart, tend, nbcify, &curlocop,
@@ -1539,9 +1662,20 @@ void process_trace(gengetopt_args_info *args_info) {
               goal.Comment("Reduce begin");
             goal.SetTag(MAKE_TAG(comm, (collsbase + nops)));
             goal.StartOp();
-            create_binomial_tree_reduce_rank(&goal, root,
-                                             host + hosts * extrhost,
-                                             hosts * extrhosts, count * size);
+            CollectiveContext ctx;
+            ctx.root = root;
+            SelectedAlgorithm selected = select_algorithm_or_warn(
+                selector, CollectiveKind::Reduce, hosts * extrhosts,
+                count * size, "reduce", selector_debug);
+            if (selected.generator) {
+              selected.generator(&goal, host + hosts * extrhost,
+                                 hosts * extrhosts, count * size, ctx);
+            } else {
+              create_binomial_tree_reduce_rank(&goal, root,
+                                               host + hosts * extrhost,
+                                               hosts * extrhosts,
+                                               count * size);
+            }
             std::pair<Goal::locop, Goal::locop> ops = goal.EndOp();
 
             finish_coll("reduce", ops, tstart, tend, nbcify, &curlocop, &goal);
@@ -1589,8 +1723,19 @@ void process_trace(gengetopt_args_info *args_info) {
               goal.Comment("Alltoall begin");
             goal.SetTag(MAKE_TAG(comm, (collsbase + nops)));
             goal.StartOp();
-            create_linear_alltoall_rank(&goal, host + hosts * extrhost,
-                                        hosts * extrhosts, count * size);
+            CollectiveContext ctx;
+            SelectedAlgorithm selected = select_algorithm_or_warn(
+                selector, CollectiveKind::Alltoall, hosts * extrhosts,
+                count * size, "alltoall", selector_debug);
+            if (selected.generator) {
+              selected.generator(&goal, host + hosts * extrhost,
+                                 hosts * extrhosts, count * size, ctx);
+            } else {
+              create_linear_alltoall_rank(&goal,
+                                          host + hosts * extrhost,
+                                          hosts * extrhosts,
+                                          count * size);
+            }
             std::pair<Goal::locop, Goal::locop> ops = goal.EndOp();
 
             finish_coll("alltoall", ops, tstart, tend, nbcify, &curlocop,

@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <vector>
 
+#include "collective_registry.h"
 #include "schedgen_coll_helper.h"
 
 void create_linear_alltoall_rank(Goal *goal, int src_rank, int comm_size,
@@ -76,3 +77,21 @@ void create_linear_alltoallv(gengetopt_args_info *args_info) {
   }
   goal.Write();
 }
+
+namespace {
+
+void linear_alltoall(Goal *goal, int rank, int comm_size, int datasize,
+                     const CollectiveContext &ctx) {
+  (void)ctx;
+  create_linear_alltoall_rank(goal, rank, comm_size, datasize);
+}
+
+bool register_algorithms() {
+  register_collective_algorithm(CollectiveKind::Alltoall, "linear",
+                                linear_alltoall);
+  return true;
+}
+
+const bool registered = register_algorithms();
+
+} // namespace

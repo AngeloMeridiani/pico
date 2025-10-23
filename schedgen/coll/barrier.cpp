@@ -12,6 +12,7 @@
 #include <cmath>
 #include <vector>
 
+#include "collective_registry.h"
 #include "schedgen_coll_helper.h"
 
 void create_dissemination_rank(Goal *goal, int comm_rank, int comm_size,
@@ -115,3 +116,25 @@ void create_nway_dissemination(gengetopt_args_info *args_info) {
   }
   goal.Write();
 }
+
+namespace {
+
+void dissemination_barrier(Goal *goal, int rank, int comm_size, int datasize,
+                           const CollectiveContext &ctx) {
+  (void)ctx;
+  create_dissemination_rank(goal, rank, comm_size, datasize);
+}
+
+bool register_algorithms() {
+  register_collective_algorithm(CollectiveKind::Barrier, "dissemination",
+                                dissemination_barrier);
+  register_collective_algorithm(CollectiveKind::Iallreduce, "dissemination",
+                                dissemination_barrier);
+  register_collective_algorithm(CollectiveKind::Allgather, "dissemination",
+                                dissemination_barrier);
+  return true;
+}
+
+const bool registered = register_algorithms();
+
+} // namespace

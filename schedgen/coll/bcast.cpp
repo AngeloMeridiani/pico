@@ -14,6 +14,7 @@
 #include <queue>
 #include <vector>
 
+#include "collective_registry.h"
 #include "schedgen_coll_helper.h"
 
 void create_binomial_tree_bcast_rank(Goal *goal, int root, int comm_rank,
@@ -262,3 +263,27 @@ void create_pipelined_ring_dep(gengetopt_args_info *args_info) {
       goal.Write();
   }
 }
+
+namespace {
+
+void binomial_bcast(Goal *goal, int rank, int comm_size, int datasize,
+                    const CollectiveContext &ctx) {
+  create_binomial_tree_bcast_rank(goal, ctx.root, rank, comm_size, datasize);
+}
+
+void binary_bcast(Goal *goal, int rank, int comm_size, int datasize,
+                  const CollectiveContext &ctx) {
+  create_binary_tree_bcast_rank(goal, ctx.root, rank, comm_size, datasize);
+}
+
+bool register_algorithms() {
+  register_collective_algorithm(CollectiveKind::Bcast, "binomial",
+                                binomial_bcast);
+  register_collective_algorithm(CollectiveKind::Bcast, "binary",
+                                binary_bcast);
+  return true;
+}
+
+const bool registered = register_algorithms();
+
+} // namespace

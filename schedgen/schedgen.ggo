@@ -25,4 +25,5 @@ option "traces-print" - "print each operation" default="0" int optional
 option "traces-nop2p" - "do not consider point-to-point communication" flag off
 option "traces-nocolls" - "do not consider collective communication" flag off
 option "traces-nbcify" - "turn blocking collectives into non-blocking colls, time to pre-post NBCs" default="0" int optional
-
+option "selector-rules" - "Path to collective selection rules file used when generating traces" string optional
+option "selector-debug" - "Print chosen collective algorithms during trace processing" flag off

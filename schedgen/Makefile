@@ -9,7 +9,9 @@ COLL_OBJS=coll/bcast.o \
           coll/alltoall.o \
           coll/gather.o \
           coll/scatter.o \
-          coll/pairwise.o
+          coll/pairwise.o \
+          coll/collective_registry.o \
+          coll/collective_selector.o
 
 OBJS=buffer_element.o cmdline.o process_trace.o schedgen.o $(COLL_OBJS)
 

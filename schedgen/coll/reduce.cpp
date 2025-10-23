@@ -12,6 +12,7 @@
 
 #include <cmath>
 
+#include "collective_registry.h"
 #include "schedgen_coll_helper.h"
 
 void create_binomial_tree_reduce_rank(Goal *goal, int root, int comm_rank,
@@ -54,3 +55,20 @@ void create_binomial_tree_reduce(gengetopt_args_info *args_info) {
   }
   goal.Write();
 }
+
+namespace {
+
+void binomial_reduce(Goal *goal, int rank, int comm_size, int datasize,
+                     const CollectiveContext &ctx) {
+  create_binomial_tree_reduce_rank(goal, ctx.root, rank, comm_size, datasize);
+}
+
+bool register_algorithms() {
+  register_collective_algorithm(CollectiveKind::Reduce, "binomial",
+                                binomial_reduce);
+  return true;
+}
+
+const bool registered = register_algorithms();
+
+} // namespace

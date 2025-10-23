@@ -5,10 +5,10 @@ compile_commands.json
 bin/
 obj/
 lib/
-Schedgen/traces/hpc/
-Schedgen/cmdline.c
-Schedgen/cmdline.h
-Schedgen/schedgen
+schedgen/traces/hpc/
+schedgen/cmdline.c
+schedgen/cmdline.h
+schedgen/schedgen
 plot/*/*
 *.err
 *.o

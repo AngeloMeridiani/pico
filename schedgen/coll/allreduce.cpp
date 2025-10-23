@@ -9,6 +9,10 @@
  */
 #include "../schedgen.hpp"
 
+#include <utility>
+#include <vector>
+
+#include "collective_registry.h"
 #include "schedgen_coll_helper.h"
 
 void create_allreduce_recdoub_rank(Goal *goal, int src_rank, int comm_size,
@@ -237,3 +241,38 @@ void create_chained_dissem(gengetopt_args_info *args_info) {
   }
   goal.Write();
 }
+
+namespace {
+
+void recursive_doubling_allreduce(Goal *goal, int rank, int comm_size,
+                                  int datasize, const CollectiveContext &ctx) {
+  create_allreduce_recdoub_rank(goal, rank, comm_size, datasize);
+}
+
+void ring_allreduce(Goal *goal, int rank, int comm_size, int datasize,
+                    const CollectiveContext &ctx) {
+  create_allreduce_ring_rank(goal, rank, comm_size, datasize);
+}
+
+void reduce_scatter_allgather_allreduce(Goal *goal, int rank, int comm_size,
+                                        int datasize,
+                                        const CollectiveContext &ctx) {
+  create_reduce_scatter_allgather_rank(goal, rank, comm_size, datasize,
+                                       ctx.replace_comp_time);
+}
+
+bool register_algorithms() {
+  register_collective_algorithm(CollectiveKind::Allreduce,
+                                "recursive_doubling",
+                                recursive_doubling_allreduce);
+  register_collective_algorithm(CollectiveKind::Allreduce, "ring",
+                                ring_allreduce);
+  register_collective_algorithm(CollectiveKind::Allreduce,
+                                "reduce_scatter_allgather",
+                                reduce_scatter_allgather_allreduce);
+  return true;
+}
+
+const bool registered = register_algorithms();
+
+} // namespace
