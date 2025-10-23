@@ -1,7 +1,10 @@
 # Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
 # Licensed under the MIT License
 
-import os, sys, argparse
+import os, sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -13,67 +16,82 @@ import matplotlib
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.stats import gmean
 
+from ..utils import ensure_dir
 
-matplotlib.rc('pdf', fonttype=42) # To avoid issues with camera-ready submission
+
+matplotlib.rc("pdf", fonttype=42)  # To avoid issues with camera-ready submission
 #rcParams['figure.figsize'] = 12,6.75
 #rcParams['figure.figsize'] = 6.75,3.375
-rcParams['figure.figsize'] = 3.375,3.375
+rcParams["figure.figsize"] = 3.375, 3.375
 sns.set_style("whitegrid")
 big_font_size = 18
 small_font_size = 15
-fmt=".2f"
-sbrn_palette = sns.color_palette("deep")# ["#A6C8FF", "#75D1D1", "#8EC6FF", "#FFBC9A", "#C8A6FF", "#F2AFA1", "#A6F0A6"]
-sota_palette = [sbrn_palette[i] for i in range(len(sbrn_palette)) if sbrn_palette[i] != sns.xkcd_rgb['red']]
+fmt = ".2f"
+sbrn_palette = sns.color_palette("deep")  # ["#A6C8FF", ...]
+sota_palette = [sbrn_palette[i] for i in range(len(sbrn_palette)) if sbrn_palette[i] != sns.xkcd_rgb["red"]]
 
 
 metrics = ["mean", "median", "percentile_90"]
 
 
 def human_readable_size(num_bytes):
-    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
+    for unit in ["B", "KiB", "MiB", "GiB", "TiB"]:
         if num_bytes < 1024:
             return f"{int(num_bytes)} {unit}"
         num_bytes /= 1024
     return f"{int(num_bytes)} PiB"
 
-def get_summaries(args, coll):
-    # Read metadata file
-    metadata_file = f"results/" + args.system + "_metadata.csv"
+
+@dataclass(slots=True)
+class BoxplotConfig:
+    system: str
+    nnodes: Iterable[str]
+    tasks_per_node: int = 1
+    notes: str | None = None
+    exclude: str | None = None
+    metric: str = "mean"
+    output_dir: str | Path | None = None
+
+    def nodes_list(self) -> list[str]:
+        if isinstance(self.nnodes, str):
+            return [n.strip() for n in str(self.nnodes).split(",") if n.strip()]
+        return [str(n) for n in self.nnodes]
+
+def get_summaries(cfg, coll):
+    metadata_file = f"results/{cfg.system}_metadata.csv"
     if not os.path.exists(metadata_file):
-        print(f"Metadata file {metadata_file} not found. Exiting.", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"Metadata file {metadata_file} not found.")
+
     metadata = pd.read_csv(metadata_file)
-    nnodes = [n for n in str(args.nnodes).split(",")]
-    summaries = {} # Contain the folder for each node count
-    # Search all the entries we might need
-    for nodes in nnodes:
+    summaries: dict[str, str] = {}
+    for nodes in cfg.nodes_list():
         if "tasks_per_node" in metadata.columns:
-            filtered_metadata = metadata[(metadata["collective_type"].str.lower() == coll) & \
-                                        (metadata["nnodes"].astype(str) == str(nodes)) & \
-                                        (metadata["tasks_per_node"].astype(int) == args.tasks_per_node)]
+            filtered_metadata = metadata[
+                (metadata["collective_type"].str.lower() == coll)
+                & (metadata["nnodes"].astype(str) == str(nodes))
+                & (metadata["tasks_per_node"].astype(int) == cfg.tasks_per_node)
+            ]
         else:
-            filtered_metadata = metadata[(metadata["collective_type"].str.lower() == coll) & \
-                                        (metadata["nnodes"].astype(str) == str(nodes))]            
-        if args.notes:
-            filtered_metadata = filtered_metadata[(filtered_metadata["notes"].str.strip() == args.notes.strip())]
+            filtered_metadata = metadata[
+                (metadata["collective_type"].str.lower() == coll)
+                & (metadata["nnodes"].astype(str) == str(nodes))
+            ]
+
+        if cfg.notes:
+            filtered_metadata = filtered_metadata[filtered_metadata["notes"].str.strip() == cfg.notes.strip()]
         else:
-            # Keep only those without notes
             filtered_metadata = filtered_metadata[filtered_metadata["notes"].isnull()]
-            
+
         if filtered_metadata.empty:
-            print(f"Metadata file {metadata_file} does not contain the requested data nodes {nodes} coll {coll}. Exiting.", file=sys.stderr)
             continue
-            #sys.exit(1)
-    
-        # Among the remaining ones, keep only tha last one
+
         filtered_metadata = filtered_metadata.iloc[-1]
-        #summaries[nodes] = "results/" + args.system + "/" + filtered_metadata["timestamp"] + "/" + str(filtered_metadata["test_id"]) + "/aggregated_result_summary.csv"
-        summaries[nodes] = "results/" + args.system + "/" + filtered_metadata["timestamp"] + "/"
+        summaries[nodes] = f"results/{cfg.system}/{filtered_metadata['timestamp']}/"
     return summaries
 
 
-def get_summaries_df(args, coll):
-    summaries = get_summaries(args, coll)
+def get_summaries_df(cfg, coll):
+    summaries = get_summaries(cfg, coll)
     df = pd.DataFrame()
     # Loop over the summaries
     for nodes, summary in summaries.items():
@@ -297,9 +315,9 @@ def augment_df(df, metric):
     # Step 7: Create a new DataFrame
     return (pd.DataFrame(new_data), (win_cases / float(total_cases)) * 100.0)
 
-def algo_to_family(df, args):
+def algo_to_family(df, cfg):
     # Convert algo_name to algo_family
-    df["algo_family"] = df["algo_name"].apply(lambda x: algo_name_to_family(x, args.system))
+    df["algo_family"] = df["algo_name"].apply(lambda x: algo_name_to_family(x, cfg.system))
     # Drop algo_name
     df = df.drop(columns=["algo_name"])
     return df
@@ -347,24 +365,24 @@ def family_name_to_letter_color(family_name):
         # error
         raise ValueError(f"Unknown algorithm family {family_name}")
 
-def get_data_coll(args, coll):
-    df = get_summaries_df(args, coll)
+def get_data_coll(cfg, coll):
+    df = get_summaries_df(cfg, coll)
           
     # Drop the columns I do not need
     df = df[["buffer_size", "Nodes", "algo_name", "mean", "median", "percentile_90"]]
 
     # If system name is "fugaku", drop all the algo_name starting with uppercase "RECDOUB"
-    if args.system == "fugaku":
+    if cfg.system == "fugaku":
         df = df[~df["algo_name"].str.startswith("RECDOUB")]
 
-    if args.exclude:
-        df = df[~df["algo_name"].str.contains(args.exclude, case=False)]
+    if cfg.exclude:
+        df = df[~df["algo_name"].str.contains(cfg.exclude, case=False)]
     
     #df = df[~df["algo_name"].str.contains("default_mpich", case=False)]
     
     # Compute the bandwidth for each metric
     for m in metrics:
-        if m == args.metric:
+        if m == cfg.metric:
             df["bandwidth_" + m] = ((df["buffer_size"]*8.0)/(1000.0*1000*1000)) / (df[m].astype(float) / (1000.0*1000*1000))
     
     # drop all the metrics
@@ -375,71 +393,48 @@ def get_data_coll(args, coll):
     pd.set_option('display.max_rows', None)
     pd.set_option('display.width', None)
 
-    df = algo_to_family(df, args)
-    return augment_df(df, args.metric)
+    df = algo_to_family(df, cfg)
+    return augment_df(df, cfg.metric)
 
-def main():
-    parser = argparse.ArgumentParser(description="Generate graphs")
-    parser.add_argument("--system", type=str, help="System name")
-    parser.add_argument("--nnodes", type=str, help="Number of nodes (comma separated)")
-    parser.add_argument("--tasks_per_node", type=int, help="Tasks per node", default=1)
-    parser.add_argument("--notes", type=str, help="Notes")   
-    parser.add_argument("--exclude", type=str, help="Algos to exclude", default=None)   
-    parser.add_argument("--metric", type=str, help="Metric to consider [mean|median|percentile_90]", default="mean")   
-    parser.add_argument("--base", type=str, help="Compare against [all|binomial]", default="all")
-    parser.add_argument("--y_no", help="Does not show ticks and labels on y-axis", action="store_true")
-    parser.add_argument("--bvb", help="Compare Bine only with Binomial", action="store_true")
-    args = parser.parse_args()
-
-    #print("Called with args:")
-    #print(args)
+def generate_boxplot(cfg: BoxplotConfig) -> Path:
     df = pd.DataFrame()
-    for coll in ["allreduce", "allgather", "reduce_scatter", "alltoall", "bcast", "reduce", "gather", "scatter"]:
-        df_coll, wins = get_data_coll(args, coll)
-        if coll.lower() == "reduce_scatter":
-            coll = "Red.-Scat."
-
-        # If empty, continue
+    collectives = ["allreduce", "allgather", "reduce_scatter", "alltoall", "bcast", "reduce", "gather", "scatter"]
+    for coll in collectives:
+        df_coll, wins = get_data_coll(cfg, coll)
+        label = "Red.-Scat." if coll.lower() == "reduce_scatter" else coll
         if df_coll.empty:
-            print(f"Warning: Bine never wins on {coll}. Skipping.", file=sys.stderr)
             continue
-        # append wins with no decimals
-        df_coll["Collective"] = coll.capitalize() + "\n(" + str(int(wins)) + "%)"
-        # Drop buffer_size and Nodes columns        
+        df_coll["Collective"] = label.capitalize() + "\n(" + str(int(wins)) + "%)"
         df_coll = df_coll.drop(columns=["buffer_size", "Nodes"])
-        # Rename cell to Improvement
         df_coll = df_coll.rename(columns={"cell": "Improvement (%)"})
-        # For improvement, do (1-improvement)*100
         df_coll["Improvement (%)"] = (df_coll["Improvement (%)"] - 1) * 100.0
         df = pd.concat([df, df_coll], ignore_index=True)
 
+    if df.empty:
+        raise RuntimeError("No data available to build the boxplot.")
 
-    # Custom mean marker style
     mean_props = {
         "marker": "o",
-        "markerfacecolor": "black",  # Fill color
-        "markeredgecolor": "black",  # Border color
-        "markersize": 8
+        "markerfacecolor": "black",
+        "markeredgecolor": "black",
+        "markersize": 8,
     }
 
-    # Make a boxplot, using "Collective" as x-axis and "Improvement" as y-axis
-    # Set the figure size
     plt.figure()
-    sns.boxplot(data=df, y="Collective", x="Improvement (%)", showfliers=True, showmeans=True, meanprops=mean_props, palette=sns.color_palette("deep"))
-    # remove y-title
+    sns.boxplot(
+        data=df,
+        y="Collective",
+        x="Improvement (%)",
+        showfliers=True,
+        showmeans=True,
+        meanprops=mean_props,
+        palette=sns.color_palette("deep"),
+    )
     plt.ylabel("")
 
-    # Make dir if it does not exist
-    outdir = "plot/" + args.system + "/"
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
-    
-    outfile = outdir + "/boxplot.pdf"
-    # Save as PDF
+    out_dir = cfg.output_dir or (Path("plot") / cfg.system)
+    ensure_dir(out_dir)
+    outfile = Path(out_dir) / "boxplot.pdf"
     plt.savefig(outfile, bbox_inches="tight")
-    
-
-    
-if __name__ == "__main__":
-    main()
-
+    plt.close()
+    return outfile

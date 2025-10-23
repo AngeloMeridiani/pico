@@ -10,6 +10,8 @@ schedgen/cmdline.c
 schedgen/cmdline.h
 schedgen/schedgen
 plot/*/*
+!plot/plots/*.py
+!plot/scripts/*.sh
 *.err
 *.o
 *.out
