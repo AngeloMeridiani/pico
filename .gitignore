@@ -5,6 +5,8 @@ compile_commands.json
 bin/
 obj/
 lib/
+traces/hpc/
+Schedgen/
 plot/*/*
 *.err
 *.o
