@@ -302,58 +302,146 @@ class ConfigureStep(StepScreen):
 
     def get_help_desc(self) -> Tuple[str,str]:
         focused = self.focused
-        field_desc = "Unknown Field"
-        chosen_desc = "No selection"
+        default_desc = (
+            "Configuration Overview",
+            "Pick an environment, resources, and data sizes to describe your benchmark run."
+        )
 
-        field_map = {
+        if not focused or not getattr(focused, "id", None):
+            return default_desc
+
+        fid = focused.id
+
+        env = self.session.environment
+        part = env.partition if env else None
+        qos = part.qos if part else None
+        test = self.session.test
+        dims = test.dimensions if test else None
+
+        def nodes_limits() -> str:
+            if env and env.slurm and part and qos:
+                mn = qos.nodes_limit.get("min", 1)
+                mx = qos.nodes_limit.get("max", mn)
+                return f"Allowed: {mn}–{mx} nodes for {part.name} / {qos.name}."
+            return "Local executions require exactly 1 node."
+
+        def time_limit() -> str:
+            if env and env.slurm and qos:
+                limit = qos.time_limit or "00:00:00"
+                return f"Format DD-HH:MM:SS (or HH:MM:SS). Max allowed: {limit}."
+            return "Debug/local runs do not accept a custom time limit."
+
+        def dtype_help() -> str:
+            if not dims:
+                return "Select the datatype used when computing element counts."
+            if dims.dtype == CDtype.UNKNOWN:
+                return "Pick a datatype to enable automatic conversion between bytes and elements."
+            return f"Current dtype: {dims.dtype}"
+
+        def buffers_help(get_segments: bool = False) -> str:
+            if not dims:
+                return "Toggle one or more segment sizes." if get_segments else "Toggle one or more message sizes; element counts follow the datatype."
+            values = dims.get_printable_sizes(get_segment_sizes=get_segments)
+            if not values:
+                return "Select at least one segment size or leave 'No Segment' to rely on library defaults." if get_segments else "Select at least one message size to generate workloads."
+            label = "Segments" if get_segments else "Buffers"
+            return f"{label} currently enabled: {', '.join(values)}"
+
+        field_map: dict[str, Tuple[str, str]] = {
             "env-select": (
-                "Select the environment for your test.",
-                self.session.environment.get_help() if self.session.environment else "No environment selected."
+                "Test Environment",
+                env.get_help() if env and env.name else "Select the target platform (loads JSON from config/environment/)."
             ),
             "partition-select": (
-                "Select the partition for your test.",
-                self.session.environment.partition.get_help() if self.session.environment.partition else "No partition selected."
+                "SLURM Partition",
+                part.get_help() if part and part.name else "Choose a partition to unlock QoS and resource limits."
             ),
             "qos-select": (
-                "Select the QOS for your test.",
-                self.session.environment.partition.qos.get_help() if self.session.environment.partition and self.session.environment.partition.qos else "No QOS selected."
+                "Quality of Service",
+                qos.get_help() if qos and qos.name else "Select a QoS profile to set node/time constraints."
             ),
-            #TODO: Add info
             "compile-switch": (
-                "Compile Only toggle",
-                "Enables compile-only mode without running tests. Not compatible with Dry Run."
+                "Compile Only",
+                "Build binaries only. Forces 1 node and disables runtime options."
             ),
             "debug-switch": (
-                "Debug Mode toggle",
-                "Compiles in debug mode. \n" \
-                "Debug mode:\n" \
-                "    - --time is set to 00:10:00\n"\
-                "    - Run only one iteration for each test instance.\n"\
-                "    - Compile with -g -DDEBUG without optimization.\n"\
-                "    - Do not save results (--compress and --delete are ignored)."
+                "Debug Mode",
+                "Fast debug recipe: short timeout, single iteration, -g -DDEBUG, skips compression."
             ),
             "dry-switch": (
-                "Dry Run Mode toggle",
-                "Dry run mode. Test the script without running the actual bench tests."
+                "Dry Run",
+                "Generate scripts without launching jobs. Incompatible with compile-only."
             ),
-            # "gpu-switch": (
-            #     "GPU Buffers toggle",
-            #     "Enables GPU buffers for the test. Requires a GPU partition.\n"\
-            #     "This option is used also for compilation of GPU exec, so it's compatible with Compile Only"
-            # ),
+            "nodes-input": (
+                "Number of Nodes",
+                nodes_limits()
+            ),
+            "time-input": (
+                "Test Time",
+                time_limit()
+            ),
+            "exclude-switch": (
+                "Exclude Nodes",
+                "Toggle to supply a comma-separated list of node names to avoid."
+            ),
+            "excluded-nodes": (
+                "Nodes to Exclude",
+                "Comma-separated hostnames passed to the job launcher."
+            ),
+            "dep-switch": (
+                "Start After",
+                "Enable to wait for another SLURM job id before running."
+            ),
+            "dep-input": (
+                "Dependency Job ID",
+                "Provide a numeric SLURM job ID that must finish before this test."
+            ),
+            "inject-switch": (
+                "Inject Parameters",
+                "Enable to add custom sbatch arguments or env vars."
+            ),
             "inject-params": (
-                "Extra sbatch params or env to set",
-                "Insert any sbatch parameter or environment variable here. \n" \
-                "Example: --gres=gpu:1 or MY_ENV_VAR=value. \n"\
-                "BEWARE: These will be added to the sbatch command line and there is NO CHECK for correctness done by the script over those params."
+                "Custom sbatch/env parameters",
+                "Comma or space separated tokens appended to the sbatch command."
             ),
-            #TODO: Add help for data type, buffer size, and segment size
+            "data-type-select": (
+                "Datatype",
+                dtype_help()
+            ),
+            "output-select": (
+                "Output Level",
+                "Choose between full iteration logs, statistics, minimal, or summary output."
+            ),
+            "compress-switch": (
+                "Compress Results",
+                "Enable gzip compression of raw CSV logs."
+            ),
+            "delete-switch": (
+                "Delete Uncompressed",
+                "If compression is enabled, remove original files after packaging."
+            ),
+            "buffer-size-select": (
+                "Message Sizes",
+                buffers_help(get_segments=False)
+            ),
+            "segment-size-select": (
+                "Segment Sizes",
+                buffers_help(get_segments=True)
+            ),
+            "prev": (
+                "Previous Step",
+                "Shortcut: press `p` to go back without leaving the TUI."
+            ),
+            "next": (
+                "Next Step",
+                "Press `n` to continue once all required fields are valid."
+            ),
         }
 
-        if focused and focused.id in field_map:
-            field_desc, chosen_desc = field_map[focused.id]
+        if fid in field_map:
+            return field_map[fid]
 
-        return (field_desc, chosen_desc)
+        return default_desc
 
     def __parse_size(self, size_label: str) -> int:
         suffixes = {"Byte": 1, "KiB": 1024, "MiB": 1024**2}
@@ -537,5 +625,3 @@ class ConfigureStep(StepScreen):
             next_b.disabled = False
         else:
             next_b.disabled = True
-
-

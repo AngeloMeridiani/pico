@@ -1,205 +1,131 @@
-# WARN
-THIS README IS OUTDATED BUT CAN BE STILL USED TO HAVE A ROUGH IDEA OF THE GENERAL TUI WORKFLOW
+# PICO Benchmarking TUI
 
-# Benchmarking TUI
-
-A Textual-based terminal UI to configure and launch collective benchmarking jobs.  
-Guides you through:
-
-1. **Environment** selection (e.g. local, lumi, leonardo)  
-2. **Partition & QOS** (if SLURM is enabled)  
-3. **Node configuration** (Nodes, Tasks per node, Test time)  
-4. **MPI implementation**  
-5. **Review & confirm** your choices  
-
----
+A Textual-based terminal UI for building repeatable PICO benchmarking runs.  
+The TUI now drives the entire test description: environment & SLURM settings,
+test dimensions, library/task mix, algorithm selection, and final export of the
+`.json` + `.sh` bundle consumed by `scripts/submit_wrapper.sh`.
 
 ## Quick Start
 
-1. Create & activate a Python 3.9+ virtual environment  
-2. Install dependencies: `pip install textual rich`
-3. From project root run: `python tui/main.py`
-4. Navigate dropdowns with arrow keys or typing, select with **Enter**.
-   * **n** or click **Next** to advance (enabled only when all required selections are made).
-   * **q** to quit at any time.
-   * **h** to toggle context‐sensitive Help.
+1. Create and activate a Python 3.9+ virtual environment.
+2. Install dependencies:
+   ```
+   pip install textual rich packaging
+   ```
+3. From the project root launch:
+   ```
+   python tui/main.py
+   ```
+4. Navigate with the keyboard:
+   - `Tab` / `Shift+Tab` to move focus
+   - `Enter` to confirm
+   - `n` / `p` (or `N` / `P`) for next/previous step
+   - `h`, `H`, or `?` for contextual help
+   - `q` to open the quit dialog
 
----
+The app targets Textual ≥ 0.39; we actively test with 0.50+.
 
-## Key Design Points
+## Workflow Overview
 
-* **Modular Steps**
-  Each logical decision point lives in its own screen class.
-* **Shared Session**
-  A `SessionConfig` dataclass instance holds environment, partition, resources, MPI, etc.
-* **Dynamic Rendering**
-  Widgets (e.g. QOS dropdown, time input) are conditionally rendered depending on SLURM presence.
-* **Validation Guards**
-  Buttons are disabled unless all visible inputs are valid.
-* **Config-Aware UI**
-  Step behavior dynamically adapts based on selected environment and config data.
+The UI is split into four screens that exchange state through a shared
+`SessionConfig` object (see `tui/models.py`).
 
----
+### 1. Configure
 
-## How It Works
+`tui/tui/steps/configure.py`
 
-### 1. `main.py`
+- **Environment** — loads `config/environment/<name>/<name>_general.json`.
+  Optional SLURM metadata is fetched from `<name>_slurm.json`.
+- **Partition + QoS** — unlocked for SLURM environments, with validation of
+  node counts (`nodes_limit`) and wall-clock time (`time_limit`).
+- **Run toggles** — compile-only, debug, dry-run, compression, delete after
+  compression, plus optional inject parameters for raw `sbatch`/env knobs.
+- **Advanced scheduling** — enable node exclusion and dependency chaining.
+- **Test dimensions** — pick datatype, buffer sizes, and segment sizes from
+  multi-select lists; element counts are recalculated live from datatype size.
+- **Validation** — inputs disable/enable automatically; inline error labels
+  explain violations (e.g., invalid node counts or time format).
 
-* Instantiates `BenchmarkApp`, applies `style.tcss`.
-* Renders a `Header`, `Router` screen container, and a `Footer`.
+Once all mandatory data are valid, `Next` becomes available.
 
-### 2. `tui/components.py` → `Router`
+### 2. Libraries
 
-* On mount, creates a `SessionConfig` instance.
-* Pushes the **EnvironmentStep** first.
+`tui/tui/steps/libraries.py`
 
-### 3. `tui/steps/environment.py` → `EnvironmentStep`
+- Pulls library definitions from `config/environment/<env>_libraries.json`.
+- Start with a single row and add/remove more using `+` / `–`.
+- Each row lets you:
+  - choose a library (per environment)
+  - set CPU/GPU tasks-per-node (validated against partition limits)
+  - toggle usage of PICO custom backends
+- Select at least one collective (Allreduce, Broadcast, …) via checkboxes.
+- Multiple libraries of the same type are supported; the UI prevents
+  duplicate selections in active rows.
 
-* Dropdown for selecting environment.
-* Loads `general.json` and optionally `slurm.json`.
-* Stores into `session.environment`.
-* If SLURM enabled, proceeds to **PartitionStep**. Otherwise goes to **NodeConfigStep**.
+### 3. Algorithms
 
-### 4. `tui/steps/partition.py` → `PartitionStep`
+`tui/tui/steps/algorithms.py`
 
-* Dropdowns for **Partition** and **QOS**.
-* When partition is selected:
+- Each collective has its own tab. Use number keys to jump directly to tab `n`.
+- Per library column lists the algorithms found in
+  `config/algorithms/<standard>/<lib_type>/<collective>.json`.
+- Version gating ensures only algorithms compatible with the configured
+  library version can be checked.
+- If the library row has `PICO backend` enabled, additional PICO-only entries
+  are shown (annotated with “PICO custom”).
+- `Next` stays disabled until every selected collective has at least one
+  algorithm, and every library contributes at least one entry.
 
-  * Dynamically builds and mounts a QOS dropdown using its `"QOS"` list.
-* Only selected QOS details are stored (not all QOS).
-* On valid selection of both, proceeds to **NodeConfigStep**.
+### 4. Summary & Save
 
-### 5. `tui/steps/node_config.py` → `NodeConfigStep`
+`tui/tui/steps/summary.py`
 
-* Configures compute resources:
+- Presents both the raw JSON configuration (`session.to_dict()`) and a readable
+  summary derived from `SessionConfig.get_summary()`.
+- Saving writes two files under `tests/`:
+  - `<name>.json` — the full configuration
+  - `<name>.sh` — an executable wrapper created via `json_to_exports`, exporting
+    the environment variables consumed by `submit_wrapper.sh`
+- Filenames are auto-suffixed to avoid overwriting existing tests.
 
-  * **Always shows**: number of nodes (min 2).
-  * **Only if SLURM**:
+## Data Sources
 
-    * Tasks per node (max = `PARTITION_CPUS_PER_NODE`)
-    * Test time (HH\:MM\:SS, max from `QOS_MAX_TIME`)
-* Validates ranges based on the config.
-* Stores values into `session.nodes`, `session.tasks_per_node`, `session.test_time`.
-* Proceeds to **MPIStep**.
+- Environment definitions live in `config/environment/<env>/`.
+  - `<env>_general.json` — human-readable description, platform toggles,
+    optional interpreter module list.
+  - `<env>_slurm.json` — SLURM partitions, QoS options, node/time limits.
+  - `<env>_libraries.json` — available MPI/NCCL libraries with compiler hints,
+    load mechanism (module/env), and GPU support metadata.
+- Algorithms are resolved from `config/algorithms/` using the library standard,
+  library type, and collective kind.
 
-### 6. `tui/steps/mpi.py` → `MPIStep`
+Updating these JSON files instantly reflects in the TUI; no code changes are
+required for new partitions, libraries, or algorithm metadata.
 
-* Dropdown of MPI implementations.
-* On selection, loads corresponding config and stores into `session.mpi`.
-* Proceeds to **SummaryStep**.
+## Helpful Features
 
-### 7. `tui/steps/summary.py` → `SummaryStep`
+- **Contextual help** (`h`, `H`, `?`) opens an overlay tailored to the focused
+  widget, summarising current selections and constraints.
+- **Quit dialog** (`q`) protects against accidental exits.
+- **Live validation** — every field updates the `SessionConfig` object and
+  enables/disables dependent inputs without reloading the screen.
+- **Keyboard friendly** — the entire flow can be completed via the bindings
+  listed in “Quick Start”.
+- **Debug mode preset** — automatically reduces run time and iterations, while
+  forcing debug compilation flags.
 
-* Displays a JSON summary of:
+## Extending the UI
 
-  * `environment.general`
-  * `partition.details` and `qos`
-  * node/test configuration
-  * `mpi.config`
-* Final **Finish** button exits the app.
+- Add new data attributes in `tui/models.py` and surface them in the relevant
+  step screen.
+- Introduce extra steps by subclassing `StepScreen` under `tui/tui/steps/` and
+  chaining them through `self.next(...)` / `self.prev(...)`.
+- When adding new configuration sections, remember to include the data in
+  `SessionConfig.to_dict()` so the summary and export script stay in sync.
 
----
+## Credits
 
-## Context-Sensitive Help (`h`)
-
-Press **h** in any step to toggle a help overlay:
-
-* **No selection yet** → Prompts user to start selecting.
-* **Dropdown focused** → Displays the selected option’s `"desc"` from the JSON.
-* **Partial selections** → Guides next expected action.
-* **Final step** → Gives summary confirmation guidance.
-
----
-
-## Dependencies
-
-* **Python 3.9+**
-* **textual** ≥ 0.22
-* **rich** ≥ 10
-
----
-
-## Extending the TUI
-
-### Add a New Step
-
-1. Create a file in `tui/steps/`, e.g. `compiler.py`
-2. Subclass `StepScreen` and implement:
-   * `compose()` — UI widgets
-   * Event handlers: `on_select_changed()`, `on_button_pressed()`
-   * `get_help_desc()` — help string for focused widget
-3. Push it from the previous step using `self.next(CompilerStep)` (and adjust next step)
-4. Update `SessionConfig` in `models.py` if needed to save also new step's data
-5. Adjust `SummaryStep` to show new saved data.
-
-#### Example
-
-```python
-class CompilerStep(StepScreen):
-    def compose(self):
-        yield Static("Choose Compiler", classes="screen-header")
-        yield Select([("GCC", "gcc"), ("Clang", "clang")], prompt="Compiler", id="compiler-select")
-        yield Button("Next", id="next", disabled=True)
-
-    def on_select_changed(self, event):
-        self.session.compiler = event.value
-        self.query_one("#next").disabled = False
-
-    def on_button_pressed(self, event):
-        self.next(SummaryStep)
-
-    def get_help_desc(self):
-        return "Select your preferred compiler."
-```
-
-Then in the previous step (e.g. MPI):
-
-```python
-def on_button_pressed(self, event):
-    if event.button.id == "next":
-        self.next(CompilerStep)
-```
-
-### Add Data to the Session
-
-Update `SessionConfig` in `models.py`:
-
-```python
-@dataclass
-class CompilerSelection:
-    name: str = ''
-    flags: Optional[str] = None
-
-@dataclass
-class SessionConfig:
-    ...
-    compiler: CompilerSelection = field(default_factory=CompilerSelection)
-```
-
-Update `SummaryStep` in `tui/steps/summary.py`:
-
-```python
-@dataclass
-class SummaryStep(StepScreen):
-    ...
-    summary = {
-      ...
-      "compiler": self.session.compiler
-```
-
----
-
-## Feature Highlights
-
-* ✅ Step-by-step interactive benchmarking config
-* ✅ SLURM-aware behavior (partition, QOS, resource bounds)
-* ✅ Local environment fallback with simplified UI
-* ✅ Validated inputs with clear error messages
-* ✅ Contextual help (`h`) in every step
-* ✅ Extensible via modular screen system
-* ✅ Textual-based, works in any modern terminal
-
----
-
-Enjoy benchmarking with clarity and structure!
-
+- Original TUI prototype: Daniele De Sensi and Saverio Pasqualoni.
+- Current iteration (2024–2025): major redesign by Saverio Pasqualoni, including
+  multi-library support, algorithm selection, JSON/Shell export pipeline, and
+  richer validation UX.

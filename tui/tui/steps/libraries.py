@@ -8,7 +8,7 @@ from .base import StepScreen
 from config_loader import lib_get_libraries
 from textual.reactive import reactive
 from models import LibrarySelection, CollectiveType, TestType
-from typing import Optional
+from typing import Optional, Tuple
 
 
 class LibRow(Horizontal):
@@ -212,9 +212,108 @@ class LibrariesStep(StepScreen):
         self.__update_next_button()
 
 
-    # TODO:
-    def get_help_desc(self):
-        return "a","b"
+    def get_help_desc(self) -> Tuple[str, str]:
+        focused = self.focused
+        default = (
+            "Library Setup",
+            "Pick one or more MPI/NCCL libraries, specify CPU/GPU tasks per node, and enable the collectives you want to benchmark."
+        )
+
+        if not focused or not getattr(focused, "id", None):
+            return default
+
+        fid = focused.id
+        env = self.session.environment
+        part = env.partition if env else None
+        qos = part.qos if part else None
+
+        def partition_limits(kind: str) -> str:
+            if not (env and env.slurm and part):
+                return "Local mode expects comma-separated positive integers."
+            if kind == "cpu":
+                limit = part.cpus_per_node
+                return f"Comma-separated task counts (1–{limit}) per node."
+            if part.gpus_per_node is not None:
+                limit = part.gpus_per_node
+                return f"Comma-separated GPU task counts (1–{limit}) per node."
+            return "This partition exposes no GPUs."
+
+        if fid.startswith("lib-sel-"):
+            idx = fid.split("-")[-1]
+            select = self.query_one(f"#lib-sel-{idx}", Select)
+            current = select.value if (select and select.value is not Select.BLANK) else None
+            lib_repo = getattr(self, "_LibrariesStep__lib_data", {}).get("LIBRARY", {})
+            if current:
+                meta = lib_repo.get(current, {})
+                desc = meta.get("desc", "No description available.")
+                version = meta.get("version", "unknown")
+                compiler = meta.get("compiler", "unspecified toolchain")
+                gpu_support = "GPU support enabled" if meta.get("gpu", {}).get("support") else "CPU-only"
+                return (
+                    f"Library {current}",
+                    f"{desc}\nVersion: {version} | Compiler: {compiler}\n{gpu_support}."
+                )
+            available_libs = getattr(self, "_LibrariesStep__available_libs", [])
+            available = ", ".join(available_libs) if available_libs else "No libraries configured for this environment."
+            return (
+                "Select Library",
+                f"Choose one of: {available}."
+            )
+
+        if fid.startswith("cpu-tasks-"):
+            return (
+                "CPU Tasks per Node",
+                partition_limits("cpu")
+            )
+
+        if fid.startswith("gpu-tasks-"):
+            return (
+                "GPU Tasks per Node",
+                partition_limits("gpu")
+            )
+
+        if fid.startswith("pico-backend-"):
+            switch = self.query_one(f"#{fid}", Switch)
+            state = "enabled" if switch and switch.value else "disabled"
+            return (
+                "PICO Custom Backend",
+                f"PICO-specific algorithm metadata for this library is currently {state}. Enable to expose LibPico-only algorithms in the next step."
+            )
+
+        if fid.startswith("add-"):
+            return (
+                "Add Library Row",
+                "Create another library entry to mix multiple MPI/NCCL stacks in a single test."
+            )
+
+        if fid.startswith("remove-"):
+            return (
+                "Remove Library Row",
+                "Delete this library configuration. At least one configured library must remain."
+            )
+
+        if fid.startswith("checkbox-"):
+            checkbox = focused
+            label = str(getattr(checkbox, "label", "Collective"))
+            selected = "enabled" if checkbox.value else "disabled"
+            return (
+                "Collective Selection",
+                f"{label} is currently {selected}. Tick at least one collective to move forward."
+            )
+
+        if fid == "prev":
+            return (
+                "Previous Step",
+                "Return to environment and test configuration (shortcut: `p`)."
+            )
+
+        if fid == "next":
+            return (
+                "Next Step",
+                "Proceed to choose per-collective algorithms once every row is fully configured (shortcut: `n`)."
+            )
+
+        return default
 
     def __add_lib(self) -> None:
         self.__update_already_used()
@@ -320,4 +419,3 @@ class LibrariesStep(StepScreen):
             return False, f"All numbers must be <= {max_val}."
 
         return True, ""
-

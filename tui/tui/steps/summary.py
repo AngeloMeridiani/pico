@@ -534,6 +534,37 @@ class SummaryStep(StepScreen):
             self.app.push_screen(SaveScreen(self.__json))
 
 
-    # TODO:
-    def get_help_desc(self):
-        return "a","b"
+    def get_help_desc(self) -> Tuple[str, str]:
+        focused = self.focused
+        default = (
+            "Review & Export",
+            "Inspect the generated JSON and short summary, then save the bundle into tests/."
+        )
+
+        if not focused or not getattr(focused, "id", None):
+            return default
+
+        fid = focused.id
+
+        if fid == "json-log":
+            return (
+                "Generated Test JSON",
+                "Full configuration as saved to <name>.json. Use arrow keys or PgUp/PgDn to scroll."
+            )
+        if fid == "summary-log":
+            return (
+                "Short Summary",
+                "Condensed view of environment, nodes, dimensions, and libraries."
+            )
+        if fid == "prev":
+            return (
+                "Previous Step",
+                "Return to algorithm selection to make changes (shortcut: `p`)."
+            )
+        if fid == "next":
+            return (
+                "Save & Export",
+                "Open the save dialog to choose a filename. An executable .sh export is produced alongside the JSON."
+            )
+
+        return default
