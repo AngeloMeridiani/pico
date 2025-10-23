@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025 Daniele De Sensi e Saverio Pasqualoni
+ * Licensed under the MIT License
+ */
 #ifndef SCHEDGEN_COLL_COLLECTIVE_REGISTRY_H
 #define SCHEDGEN_COLL_COLLECTIVE_REGISTRY_H
 
