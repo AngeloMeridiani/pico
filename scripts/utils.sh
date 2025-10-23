@@ -1,4 +1,8 @@
 ###############################################################################
+# Shared shell helpers sourced by the orchestration scripts.
+###############################################################################
+
+###############################################################################
 # Cleanup function for SIGINT/SIGTERM
 ###############################################################################
 cleanup() {
@@ -370,7 +374,7 @@ parse_cli_args() {
             --ntasks-per-node)
                 check_arg "$1" "$2"; export TASKS_PER_NODE="$2"; shift 2 ;;
             --ntasks)
-                export FORCE_TASKS="$2"; shift 2 ;;
+                check_arg "$1" "$2"; export FORCE_TASKS="$2"; shift 2 ;;
             --compile-only)
                 check_arg "$1" "$2"; export COMPILE_ONLY="$2"; shift 2 ;;
             --output-dir)
@@ -433,10 +437,18 @@ parse_cli_args() {
 ###############################################################################
 check_enum() {
     local val=$1 flag=$2 ctx=$3 allowed=$4
-    for a in "${allowed//,/ }"; do
-        [[ "$val" == "$a" ]]
-        return 0
+    local match=0
+    local allowed_vals=()
+    local normalized_val="${val//[[:space:]]/}"
+    IFS=',' read -r -a allowed_vals <<< "$allowed"
+    for a in "${allowed_vals[@]}"; do
+        local trimmed="${a//[[:space:]]/}"
+        [[ "$normalized_val" == "$trimmed" ]] && { match=1; break; }
     done
+
+    if (( match )); then
+        return 0
+    fi
 
     error "$flag must be one of: ${allowed}."
     usage "$ctx"
@@ -500,7 +512,14 @@ validate_args() {
     check_enum "$DELETE" "--delete" "data" "yes,no" || return 1
 
     check_regex "$TEST_TIME" "--time" "job" "^[0-9]{2}:[0-5][0-9]:[0-5][0-9]$" || return 1
-    check_list "$JOB_DEP" "^[0-9]+$" "--job-dep" "job" || return 1
+    if [[ -n "$JOB_DEP" ]]; then
+        local dep
+        local -a _job_dep_list=()
+        IFS=':' read -r -a _job_dep_list <<< "$JOB_DEP"
+        for dep in "${_job_dep_list[@]}"; do
+            [[ "$dep" =~ ^[0-9]+$ ]] || { error "--job-dep must be a colon-separated list of numeric job IDs."; usage "job"; return 1; }
+        done
+    fi
     check_enum "$INTERACTIVE" "--interactive" "job" "yes,no" || return 1
 
     check_enum "$DEBUG_MODE" "--debug" "debug" "yes,no" || return 1

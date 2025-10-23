@@ -1,4 +1,7 @@
 #!/bin/bash
+# High-level entry point that validates CLI flags and submits jobs to SLURM.
+# Usage: scripts/submit_wrapper.sh [options]
+# Delegates execution to scripts/orchestrator.sh or runs locally when requested.
 
 source scripts/utils.sh
 

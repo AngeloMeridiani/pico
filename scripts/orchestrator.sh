@@ -1,4 +1,7 @@
 #!/bin/bash
+# Core benchmarking loop executed on the compute nodes (invoked by submit_wrapper.sh).
+# Usage: scripts/orchestrator.sh (normally via sbatch/srun; expects environment exported by submit_wrapper.sh)
+
 # Trap SIGINT (Ctrl+C) and call cleanup function
 trap cleanup SIGINT
 
@@ -52,4 +55,3 @@ if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" && "$COMPRESS" == "yes" ]]; th
 fi
 
 [[ "$LOCATION" != "local" ]] && squeue -j $SLURM_JOB_ID
-
