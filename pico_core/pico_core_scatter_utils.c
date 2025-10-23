@@ -40,7 +40,7 @@ int scatter_allocator_cuda(void **d_sbuf, void **d_rbuf, void **d_rbuf_gt, size_
   MPI_Comm_size(comm, &comm_sz);
   MPI_Comm_rank(comm, &rank);
 
-  cudaError  cudaError_t err;
+  cudaError_t err;
 
   if (rank == 0) {
     PICO_CORE_CUDA_CHECK(cudaMalloc(d_sbuf, count * type_size), err);

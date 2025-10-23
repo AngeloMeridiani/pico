@@ -314,7 +314,7 @@ DEFINE_TEST_LOOP(scatter, SCATTER_MPI_ARGS, scatter(sbuf, scount, sdtype, rbuf, 
  * @return 0 on success, -1 on error.
  */
 int test_loop(test_routine_t test_routine, void *sbuf, void *rbuf, size_t count,
-              ncclDataType_t dtype, ncclResult_t nccl_comm, cudaStream_t stream, int iter, double *times);
+              ncclDataType_t dtype, ncclComm_t nccl_comm, cudaStream_t stream, int iter, double *times);
 
 /**
  * @macro DEFINE_TEST_LOOP
@@ -324,37 +324,37 @@ int test_loop(test_routine_t test_routine, void *sbuf, void *rbuf, size_t count,
  * @param ARGS Arguments for the operation.
  * @param COLLECTIVE Collective operation to perform.
  */
-#define DEFINE_TEST_LOOP(OP_NAME, ARGS, COLLECTIVE)                       \
-static inline int OP_NAME##_test_loop(ARGS, int iter, double *times,      \
-                                           test_routine_t test_routine) {      \
-  ncclResult_t ret = ncclSuccess;                                              \
-  cudaError_t  cerr;                                                           \
-  cudaEvent_t  ev0, ev1;                                                       \
-  PICO_CORE_CUDA_CHECK(cudaEventCreate(&ev0), cerr);                           \
-  PICO_CORE_CUDA_CHECK(cudaEventCreate(&ev1), cerr);                           \
-                                                                               \
-  PICO_CORE_CUDA_CHECK(cudaStreamSynchronize(stream), cerr);                   \
-  MPI_Barrier(MPI_COMM_WORLD);                                                 \
-  for (int i = 0; i < iter; i++) {                                             \
-    PICO_CORE_CUDA_CHECK(cudaEventRecord(ev0, stream), cerr);                  \
-    ret = test_routine.function.COLLECTIVE;                                    \
-    if (PICO_CORE_UNLIKELY(ret != ncclSuccess)) {                              \
-      fprintf(stderr, "Error: " #OP_NAME " failed (NCCL): %s\n",               \
-              ncclGetErrorString(nret));                                       \
-      PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev0), cerr);                       \
-      PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev1), cerr);                       \
-      return -1;                                                               \
-    }                                                                          \
-    PICO_CORE_CUDA_CHECK(cudaEventRecord(ev1, stream), cerr);                  \
-    PICO_CORE_CUDA_CHECK(cudaEventSynchronize(ev1), cerr);                     \
-    float ms = 0.0f;                                                           \
-    PICO_CORE_CUDA_CHECK(cudaEventElapsedTime(&ms, ev0, ev1), cerr);           \
-    times[i] = ms * 1e-3;                                                      \
-    MPI_Barrier(MPI_COMM_WORLD);                                               \
-  }                                                                            \
-  PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev0), cerr);                           \
-  PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev1), cerr);                           \
-  return 0;                                                                    \
+#define DEFINE_TEST_LOOP(OP_NAME, ARGS, COLLECTIVE)                         \
+static inline int OP_NAME##_test_loop(ARGS, int iter, double *times,        \
+                                      test_routine_t test_routine) {        \
+  ncclResult_t ret = ncclSuccess;                                           \
+  cudaError_t  cerr;                                                        \
+  cudaEvent_t  ev0, ev1;                                                    \
+  PICO_CORE_CUDA_CHECK(cudaEventCreate(&ev0), cerr);                        \
+  PICO_CORE_CUDA_CHECK(cudaEventCreate(&ev1), cerr);                        \
+                                                                            \
+  PICO_CORE_CUDA_CHECK(cudaStreamSynchronize(stream), cerr);                \
+  MPI_Barrier(MPI_COMM_WORLD);                                              \
+  for (int i = 0; i < iter; i++) {                                          \
+    PICO_CORE_CUDA_CHECK(cudaEventRecord(ev0, stream), cerr);               \
+    ret = test_routine.function.COLLECTIVE;                                 \
+    if (PICO_CORE_UNLIKELY(ret != ncclSuccess)) {                           \
+      fprintf(stderr, "Error: " #OP_NAME " failed (NCCL): %s\n",            \
+              ncclGetErrorString(ret));                                     \
+      PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev0), cerr);                    \
+      PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev1), cerr);                    \
+      return -1;                                                            \
+    }                                                                       \
+    PICO_CORE_CUDA_CHECK(cudaEventRecord(ev1, stream), cerr);               \
+    PICO_CORE_CUDA_CHECK(cudaEventSynchronize(ev1), cerr);                  \
+    float ms = 0.0f;                                                        \
+    PICO_CORE_CUDA_CHECK(cudaEventElapsedTime(&ms, ev0, ev1), cerr);        \
+    times[i] = ms * 1e-3;                                                   \
+    MPI_Barrier(MPI_COMM_WORLD);                                            \
+  }                                                                         \
+  PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev0), cerr);                        \
+  PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev1), cerr);                        \
+  return 0;                                                                 \
 }
 
 DEFINE_TEST_LOOP(allreduce, ALLREDUCE_NCCL_ARGS, allreduce(sbuf, rbuf, count, dtype, ncclSum, nccl_comm, stream))
