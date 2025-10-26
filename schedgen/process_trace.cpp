@@ -454,42 +454,21 @@ struct SelectedAlgorithm {
   CollectiveGenerator generator;
 };
 
-static const char *default_algorithm_for_kind(CollectiveKind kind) {
-  switch (kind) {
-  case CollectiveKind::Barrier:
-    return "dissemination";
-  case CollectiveKind::Allreduce:
-    return "recursive_doubling";
-  case CollectiveKind::Iallreduce:
-    return "dissemination";
-  case CollectiveKind::Bcast:
-    return "binomial";
-  case CollectiveKind::Allgather:
-    return "dissemination";
-  case CollectiveKind::Reduce:
-    return "binomial";
-  case CollectiveKind::Alltoall:
-    return "linear";
-  }
-  return "";
-}
-
 static SelectedAlgorithm resolve_algorithm(CollectiveSelector &selector,
                                            CollectiveKind kind,
                                            int comm_size, int msg_size) {
-  const char *fallback = default_algorithm_for_kind(kind);
   std::string chosen = selector.choose(kind, comm_size, msg_size);
-  if (chosen.empty() && fallback)
-    chosen = fallback;
+  std::string fallback = selector.fallback_algorithm(kind);
+  std::string selected = chosen.empty() ? fallback : chosen;
   CollectiveGenerator gen;
-  if (!chosen.empty()) {
-    gen = lookup_collective_algorithm(kind, chosen);
-    if (!gen && fallback && chosen != fallback) {
-      chosen = fallback;
-      gen = lookup_collective_algorithm(kind, chosen);
+  if (!selected.empty()) {
+    gen = lookup_collective_algorithm(kind, selected);
+    if (!gen && !fallback.empty() && selected != fallback) {
+      selected = fallback;
+      gen = lookup_collective_algorithm(kind, selected);
     }
   }
-  return {chosen, gen};
+  return {selected, gen};
 }
 
 static SelectedAlgorithm select_algorithm_or_warn(CollectiveSelector &selector,

@@ -25,6 +25,7 @@ public:
   bool load_rules_file(const std::string &path);
   std::string choose(CollectiveKind kind, int comm_size,
                      int msg_size) const;
+  std::string fallback_algorithm(CollectiveKind kind) const;
 
 private:
   struct RuleSet {

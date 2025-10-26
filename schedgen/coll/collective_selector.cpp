@@ -102,6 +102,14 @@ std::string CollectiveSelector::choose(CollectiveKind kind, int comm_size,
   return set.fallback_algorithm;
 }
 
+std::string CollectiveSelector::fallback_algorithm(CollectiveKind kind) const {
+  auto it = rule_map.find(kind);
+  if (it == rule_map.end()) {
+    return std::string();
+  }
+  return it->second.fallback_algorithm;
+}
+
 bool CollectiveSelector::match_rule(const CollectiveRule &rule, int comm_size,
                                     int msg_size) {
   if (comm_size < rule.min_comm)

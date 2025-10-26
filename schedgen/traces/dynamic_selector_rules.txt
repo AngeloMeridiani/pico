@@ -5,4 +5,6 @@
 # Message sizes are in bytes (count * datatype size).
 
 # allreduce recursive_doubling 0 1024 0 131072
-allreduce ring 0 * 0 *
+allreduce recursive_doubling 0 * 0 16384
+allreduce reduce_scatter_allgather 0 * 16385 16777216
+allreduce ring 0 * 16777217 *

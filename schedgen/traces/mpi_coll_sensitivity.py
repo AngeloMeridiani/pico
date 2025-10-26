@@ -153,6 +153,42 @@ def breakdown_collectives_for_file(path: Path):
     total_time_s = sum(times_s.values())
     return counts, times_s, total_count, total_time_s
 
+
+def collect_allreduce_dimensions(path: Path):
+    """
+    Build a histogram of MPI_Allreduce message 'dimensions', i.e., element
+    counts and datatype byte sizes. Returns (hist Counter, total_allreduces, errors).
+    """
+    hist = Counter()
+    total = 0
+    errors = 0
+    with path.open("r", encoding="utf-8", errors="ignore") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line.startswith("MPI_Allreduce:"):
+                continue
+            parts = line.split(":")
+            if len(parts) < 6:
+                errors += 1
+                continue
+            try:
+                elem_count = int(parts[4])
+            except ValueError:
+                errors += 1
+                continue
+            dtype_token = parts[5]
+            dtype_fields = dtype_token.split(",")
+            dtype_bytes = None
+            if len(dtype_fields) >= 2:
+                try:
+                    dtype_bytes = int(dtype_fields[1])
+                except ValueError:
+                    dtype_bytes = None
+            key = (elem_count, dtype_bytes, dtype_token)
+            hist[key] += 1
+            total += 1
+    return hist, total, errors
+
 def human_s(x):
     if x is None:
         return "-"
@@ -172,6 +208,17 @@ def main():
                     help="Print the per-run summary table (Avg/Min/Max).")
     ap.add_argument("--csv", type=str, default=None,
                     help="Optional CSV file path to save the breakdown rows.")
+    ap.add_argument(
+        "--show-allreduce-dims",
+        action="store_true",
+        help="Print the MPI_Allreduce element/datatype distribution for each top run.",
+    )
+    ap.add_argument(
+        "--allreduce-dims-limit",
+        type=int,
+        default=10,
+        help="Maximum rows to show per run when --show-allreduce-dims is enabled (0 = unlimited).",
+    )
     args = ap.parse_args()
 
     root = Path(args.root)
@@ -287,6 +334,61 @@ def main():
         print("-" * 75)
         print(f"{'TOTAL':<16} {total_count:8d} {100.00:12.2f}% {total_time_s:12.6f} {100.00:14.2f}%\n")
 
+        if args.show_allreduce_dims:
+            try:
+                hist, total_allr, dim_errors = collect_allreduce_dimensions(path)
+            except OSError as exc:
+                print(f"    Failed to read MPI_Allreduce dimensions: {exc}")
+                continue
+
+            print("    MPI_Allreduce dimension distribution:")
+            if total_allr == 0:
+                print("      (no MPI_Allreduce calls in this trace)")
+            else:
+                rows = []
+                for (elem_count, dtype_bytes, dtype_token), freq in hist.items():
+                    msg_bytes = (
+                        elem_count * dtype_bytes
+                        if (elem_count is not None and dtype_bytes is not None)
+                        else None
+                    )
+                    pct = freq / total_allr * 100.0 if total_allr else 0.0
+                    rows.append(
+                        {
+                            "elem_count": elem_count,
+                            "dtype_bytes": dtype_bytes,
+                            "msg_bytes": msg_bytes,
+                            "freq": freq,
+                            "pct": pct,
+                            "dtype_token": dtype_token,
+                        }
+                    )
+                rows.sort(key=lambda r: (-r["freq"], r["elem_count"]))
+
+                limit = args.allreduce_dims_limit or 0
+                display_rows = rows if limit <= 0 else rows[:limit]
+
+                header = (
+                    f"{'Elems':>10} {'DTypeB':>8} {'MsgB':>10} "
+                    f"{'Hits':>8} {'Pct':>7}  {'Datatype token'}"
+                )
+                print("      " + header)
+                print("      " + "-" * (len(header) + 5))
+                for row in display_rows:
+                    dtype_b = row["dtype_bytes"] if row["dtype_bytes"] is not None else "-"
+                    msg_b = row["msg_bytes"] if row["msg_bytes"] is not None else "-"
+                    print(
+                        f"      {row['elem_count']:10d} {dtype_b:>8} "
+                        f"{msg_b:>10} {row['freq']:8d} {row['pct']:7.2f}%  "
+                        f"{row['dtype_token']}"
+                    )
+                if limit > 0 and len(rows) > limit:
+                    hidden = len(rows) - limit
+                    print(f"      ... ({hidden} more combinations)")
+            if dim_errors:
+                print(f"      Skipped {dim_errors} malformed MPI_Allreduce entries.")
+            print()
+
         if args.csv and total_count:
             csv_rows.append({
                 "run": r["run"], "rep_rank": r["rank"], "file": path.name,
@@ -309,4 +411,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

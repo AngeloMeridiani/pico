@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SCHEDGEN_BIN="${SCRIPT_DIR}/../bin/schedgen"
 RULES_FILE="${SCRIPT_DIR}/dynamic_selector_rules.txt"
-TRACE_ROOT="${SCRIPT_DIR}/hpc"
+TRACE_ROOT="${SCRIPT_DIR}/hpc/lulesh"
 
 if [[ ! -x "${SCHEDGEN_BIN}" ]]; then
   echo "error: schedgen binary not found or not executable at ${SCHEDGEN_BIN}" >&2
@@ -43,7 +43,7 @@ for trace_dir in "${trace_dirs[@]}"; do
     continue
   fi
 
-  goal_output="${dataset_dir}/${dataset_name}_new.goal"
+  goal_output="${dataset_dir}/${dataset_name}_opt_27_ar.goal"
 
   echo "Generating ${goal_output} from ${rank0_trace}"
   if ! "${SCHEDGEN_BIN}" \
