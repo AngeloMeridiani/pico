@@ -1,4 +1,18 @@
 ###############################################################################
+# Shared shell helpers sourced by the orchestration scripts.
+###############################################################################
+
+###############################################################################
+# Cleanup function for SIGINT/SIGTERM
+###############################################################################
+cleanup() {
+    error "Cleanup called! Killing all child processes and aborting..."
+    pkill -P $$
+    exit 1
+}
+export -f cleanup
+
+###############################################################################
 # Colors for styling output, otherwise utils needs to be sourced at every make
 ###############################################################################
 export RED='\033[0;31m'
@@ -31,6 +45,7 @@ export DEFAULT_OUTPUT_LEVEL="summarized"
 export DEFAULT_COMPRESS="yes"
 export DEFAULT_DELETE="no"
 export DEFAULT_NOTES=""
+export DEFAULT_INSTRUMENT="no"
 
 # Various SLURM options
 export DEFAULT_TEST_TIME="01:00:00"
@@ -82,15 +97,103 @@ inform() {
 }
 export -f inform
 
-###############################################################################
-# Cleanup function for SIGINT/SIGTERM
-###############################################################################
-cleanup() {
-    error "Cleanup called! Killing all child processes and aborting..."
-    pkill -P $$
-    exit 1
+
+print_formatted_list() {
+    local list_name="$1"
+    local list_items="$2"
+    local items_per_line="${3:-5}"  # Default to 5 items per line
+    local formatting="${4:-normal}" # Options: normal, numeric, size
+
+    echo "  • $list_name:"
+    if [[ -z "$list_items" ]]; then
+        echo "      None specified"
+        return
+    fi
+
+    case "$formatting" in
+        "numeric")
+            local i=1
+            for item in ${list_items//,/ }; do
+                echo "      ${i}. $item"
+                ((i++))
+            done
+            ;;
+        *)
+            echo -n "      "
+            local k=1
+            local total_items=$(echo ${list_items//,/ } | wc -w)
+            for item in ${list_items//,/ }; do
+                if (( k < total_items )); then
+                    echo -n "$item, "
+                    if (( k % items_per_line == 0 )); then
+                        echo
+                        echo -n "      "
+                    fi
+                else
+                    echo "$item"
+                fi
+                ((k++))
+            done
+            ;;
+    esac
 }
-export -f cleanup
+export -f print_formatted_list
+
+print_section_header() {
+    echo -e "\n\n"
+    success "${SEPARATOR}\n\t\t\t\t${1}\n${SEPARATOR}"
+}
+export -f print_section_header
+
+
+###############################################################################
+# DEBUG HELPERS
+###############################################################################
+trace_env_snapshot() {
+    [[ "$DEBUG_MODE" == "yes" ]] || return 0
+    local label="$1"
+    echo -e "\n${CYAN}=== ENV SNAPSHOT: ${label} ===${NC}"
+    echo "WHOAMI: $(whoami) | SHELL: $SHELL | PWD: $(pwd)"
+    echo "PICOCC: ${PICOCC:-<unset>} (which: $(command -v "${PICOCC:-}" 2>/dev/null || echo '<not found>'))"
+    echo "PATH:";             echo "${PATH}"              | tr ':' '\n' | nl -w2 -s': ' | sed 's/^/  /'
+    echo "LD_LIBRARY_PATH:";  echo "${LD_LIBRARY_PATH:-}" | tr ':' '\n' | nl -w2 -s': ' | sed 's/^/  /'
+    echo "MANPATH:";          echo "${MANPATH:-}"         | tr ':' '\n' | nl -w2 -s': ' | sed 's/^/  /'
+    echo -e "${CYAN}=================================${NC}\n"
+}
+export -f trace_env_snapshot
+
+trace_compiler_wrapper() {
+    [[ "$DEBUG_MODE" == "yes" ]] || return 0
+    local cc="${1:-$PICOCC}"
+    echo -e "${BLUE}>>> Probing compiler wrapper: ${cc}${NC}"
+    if ! command -v "$cc" >/dev/null 2>&1; then
+        warning "Compiler wrapper '$cc' not found in PATH"
+        return 0
+    fi
+    echo "  realpath: $(readlink -f "$(command -v "$cc")" 2>/dev/null || echo '?')"
+    # Open MPI banner/flags (best effort)
+    "$cc" -show 2>/dev/null | sed 's/^/  ompi -show: /' || true
+    # MPICH banner/flags (best effort)
+    "$cc" -compile_info 2>/dev/null | sed 's/^/  mpich -compile_info: /' || true
+    # Generic version
+    "$cc" --version 2>/dev/null | head -n 1 | sed 's/^/  --version: /' || true
+}
+export -f trace_compiler_wrapper
+
+trace_ldd() {
+    [[ "$DEBUG_MODE" == "yes" ]] || return 0
+    local bin="$1"
+    if [[ -x "$bin" ]]; then
+        echo -e "${BLUE}>>> ldd ${bin}${NC}"
+        ldd "$bin" | sed 's/^/  /'
+    else
+        warning "ldd: '$bin' not found or not executable"
+    fi
+}
+export -f trace_ldd
+
+trace_kv() { [[ "$DEBUG_MODE" == "yes" ]] && echo "  $1=$2"; }
+export -f trace_kv
 
 ###############################################################################
 # Usage function: prints short or full help message
@@ -271,7 +374,7 @@ parse_cli_args() {
             --ntasks-per-node)
                 check_arg "$1" "$2"; export TASKS_PER_NODE="$2"; shift 2 ;;
             --ntasks)
-                export FORCE_TASKS="$2"; shift 2 ;;
+                check_arg "$1" "$2"; export FORCE_TASKS="$2"; shift 2 ;;
             --compile-only)
                 check_arg "$1" "$2"; export COMPILE_ONLY="$2"; shift 2 ;;
             --output-dir)
@@ -334,10 +437,18 @@ parse_cli_args() {
 ###############################################################################
 check_enum() {
     local val=$1 flag=$2 ctx=$3 allowed=$4
-    for a in "${allowed//,/ }"; do
-        [[ "$val" == "$a" ]]
-        return 0
+    local match=0
+    local allowed_vals=()
+    local normalized_val="${val//[[:space:]]/}"
+    IFS=',' read -r -a allowed_vals <<< "$allowed"
+    for a in "${allowed_vals[@]}"; do
+        local trimmed="${a//[[:space:]]/}"
+        [[ "$normalized_val" == "$trimmed" ]] && { match=1; break; }
     done
+
+    if (( match )); then
+        return 0
+    fi
 
     error "$flag must be one of: ${allowed}."
     usage "$ctx"
@@ -401,7 +512,14 @@ validate_args() {
     check_enum "$DELETE" "--delete" "data" "yes,no" || return 1
 
     check_regex "$TEST_TIME" "--time" "job" "^[0-9]{2}:[0-5][0-9]:[0-5][0-9]$" || return 1
-    check_list "$JOB_DEP" "^[0-9]+$" "--job-dep" "job" || return 1
+    if [[ -n "$JOB_DEP" ]]; then
+        local dep
+        local -a _job_dep_list=()
+        IFS=':' read -r -a _job_dep_list <<< "$JOB_DEP"
+        for dep in "${_job_dep_list[@]}"; do
+            [[ "$dep" =~ ^[0-9]+$ ]] || { error "--job-dep must be a colon-separated list of numeric job IDs."; usage "job"; return 1; }
+        done
+    fi
     check_enum "$INTERACTIVE" "--interactive" "job" "yes,no" || return 1
 
     check_enum "$DEBUG_MODE" "--debug" "debug" "yes,no" || return 1
@@ -435,7 +553,7 @@ validate_args() {
             return 1
         fi
 
-        local file_path="$BINE_DIR/config/test/${collective}.json"
+        local file_path="$PICO_DIR/config/test/${collective}.json"
         if [ ! -f "$file_path" ]; then
             error "--collectives must be a comma-separated list. No '${collective}.json' file found in config/test/"
             usage "general"
@@ -507,34 +625,182 @@ source_environment() {
 }
 
 ###############################################################################
-# Load required modules
+# Load and unload required modules or env path
 ###############################################################################
 load_modules(){
-    if [ -n "$MODULES" ]; then
-        inform "Loading modules: $MODULES"
-        for module in ${MODULES//,/ }; do
-            module load $module || { error "Failed to load module $module." ; return 1; }
+    local csv="${1:-$MODULES}"
+    if [ -n "$csv" ]; then
+        inform "Loading modules: $csv"
+        for module in ${csv//,/ }; do
+            module load "$module" || { error "Failed to load module $module." ; return 1; }
         done
         success "Modules successfully loaded."
     fi
-
     return 0
 }
+export -f load_modules
+
+
+unload_modules(){
+    local csv="$1"
+    [ -z "$csv" ] && return 0
+    inform "Unloading modules: $csv"
+    # reverse order to be safe
+    local arr=()
+    for m in ${csv//,/ }; do arr+=("$m"); done
+    for (( idx=${#arr[@]}-1 ; idx>=0 ; idx-- )); do
+        module unload "${arr[$idx]}" >/dev/null 2>&1 || true
+    done
+    success "Modules successfully unloaded."
+    return 0
+}
+export -f unload_modules
+
+
+
+# ---------- apply per-library set_env ----------
+apply_lib_env() {
+  local i="$1"
+  [[ -z "$i" ]] && { error "apply_lib_env: library index required"; return 1; }
+
+  local touched=()
+  local changed_any=0
+
+  # controller lists
+  local pre_list="$(_get_var "LIB_${i}_ENV_PREPEND_VARS")"
+  local app_list="$(_get_var "LIB_${i}_ENV_APPEND_VARS")"
+  local set_list="$(_get_var "LIB_${i}_ENV_SET_VARS")"
+
+  # If no controllers exist, signal "nothing to apply"
+  if [[ -z "$pre_list" && -z "$app_list" && -z "$set_list" ]]; then
+    return 1
+  fi
+
+  [[ "$DEBUG_MODE" == "yes" ]] && echo "Applying env for library $i (set_env)"
+
+  # helper: save original and mark touched once
+  __save_once() {
+    local varname="$1"
+    # Skip if already saved
+    if [[ -z "$(_get_var "LIB_${i}_SAVED_${varname}")" ]]; then
+      local cur_val="${!varname}"
+      export "LIB_${i}_SAVED_${varname}=$cur_val"
+      touched+=("$varname")
+    fi
+  }
+
+  # PREPEND
+  local names=()
+  __csv_to_array "$pre_list" names
+  for V in "${names[@]}"; do
+    [[ -z "$V" ]] && continue
+    local spec="$(_get_var "LIB_${i}_ENV_PREPEND_${V}")"
+    [[ -z "$spec" ]] && continue
+    __save_once "$V"
+    # nameref into the target var
+    declare -n ref="$V"
+    local old="${ref}"
+    ref="${spec}${old:+:$old}"
+    changed_any=1
+    [[ "$DEBUG_MODE" == "yes" ]] && echo "  PREPEND $V: '${spec}' -> head now '${ref%%:*}'"
+  done
+
+  # APPEND
+  names=()
+  __csv_to_array "$app_list" names
+  for V in "${names[@]}"; do
+    [[ -z "$V" ]] && continue
+    local spec="$(_get_var "LIB_${i}_ENV_APPEND_${V}")"
+    [[ -z "$spec" ]] && continue
+    __save_once "$V"
+    declare -n ref="$V"
+    local old="${ref}"
+    ref="${old:+$old:}${spec}"
+    changed_any=1
+    [[ "$DEBUG_MODE" == "yes" ]] && echo "  APPEND $V: '${spec}' -> tail now '${ref##*:}'"
+  done
+
+  # SET (expand variables within the spec)
+  names=()
+  __csv_to_array "$set_list" names
+  for V in "${names[@]}"; do
+    [[ -z "$V" ]] && continue
+    local raw="$(_get_var "LIB_${i}_ENV_SET_${V}")"
+    [[ -z "$raw" ]] && continue
+    __save_once "$V"
+    # Expand $VAR references safely
+    local spec_expanded
+    spec_expanded="$(eval "printf '%s' \"$raw\"")"
+    declare -n ref="$V"
+    ref="$spec_expanded"
+    changed_any=1
+    [[ "$DEBUG_MODE" == "yes" ]] && echo "  SET $V: '${raw}' -> '${spec_expanded}'"
+  done
+
+  # record touched list for restore
+  if (( changed_any )); then
+    # join with commas
+    local joined=""
+    for V in "${touched[@]}"; do joined+="${joined:+,}$V"; done
+    export "LIB_${i}_ENV_TOUCHED=$joined"
+
+    if [[ "$DEBUG_MODE" == "yes" ]]; then
+      echo "  AFTER snapshot:"
+      [[ -n "$(_get_var "LIB_${i}_ENV_PREPEND_PATH")" || -n "$(_get_var "LIB_${i}_ENV_APPEND_PATH")" || -n "$(_get_var "LIB_${i}_ENV_SET_PATH")" ]] \
+        && echo "    PATH head:            ${PATH%%:*}"
+      [[ -n "$(_get_var "LIB_${i}_ENV_PREPEND_LD_LIBRARY_PATH")" || -n "$(_get_var "LIB_${i}_ENV_APPEND_LD_LIBRARY_PATH")" || -n "$(_get_var "LIB_${i}_ENV_SET_LD_LIBRARY_PATH")" ]] \
+        && echo "    LD_LIBRARY_PATH head: ${LD_LIBRARY_PATH%%:*}"
+      [[ -n "$(_get_var "LIB_${i}_ENV_PREPEND_MANPATH")" || -n "$(_get_var "LIB_${i}_ENV_APPEND_MANPATH")" || -n "$(_get_var "LIB_${i}_ENV_SET_MANPATH")" ]] \
+        && echo "    MANPATH head:         ${MANPATH%%:*}"
+    fi
+    return 0
+  fi
+
+  # nothing actually applied from the lists provided
+  return 1
+}
+export -f apply_lib_env
+
+# ---------- restore per-library set_env ----------
+restore_lib_env() {
+  local i="$1"
+  [[ -z "$i" ]] && { error "restore_lib_env: library index required"; return 1; }
+
+  local touched_csv="$(_get_var "LIB_${i}_ENV_TOUCHED")"
+  [[ -z "$touched_csv" ]] && return 0
+
+  [[ "$DEBUG_MODE" == "yes" ]] && echo "Restoring env for library $i (set_env)"
+
+  local names=()
+  __csv_to_array "$touched_csv" names
+  for V in "${names[@]}"; do
+    local saved="$(_get_var "LIB_${i}_SAVED_${V}")"
+    declare -n ref="$V"
+    ref="$saved"
+    unset "LIB_${i}_SAVED_${V}"
+    [[ "$DEBUG_MODE" == "yes" ]] && trace_kv "restore $V" "$ref"
+  done
+
+  unset "LIB_${i}_ENV_TOUCHED"
+  return 0
+}
+export -f restore_lib_env
+
 
 ###############################################################################
 # Activate virtual environment and install required packages
 ###############################################################################
 activate_virtualenv() {
-    if [ -f "$HOME/.bine_venv/bin/activate" ]; then
-        source "$HOME/.bine_venv/bin/activate" || { error "Failed to activate virtual environment." ; return 1; }
-        success "Virtual environment 'bine_venv' activated."
+    if [ -f "$HOME/.pico_venv/bin/activate" ]; then
+        source "$HOME/.pico_venv/bin/activate" || { error "Failed to activate virtual environment." ; return 1; }
+        success "Virtual environment 'pico_venv' activated."
     else
-        warning "Virtual environment 'bine_venv' does not exist. Creating it..."
+        warning "Virtual environment 'pico_venv' does not exist. Creating it..."
 
-        python3 -m venv "$HOME/.bine_venv" || { error "Failed to create virtual environment." ; return 1; }
-        source "$HOME/.bine_venv/bin/activate" || { error "Failed to activate virtual environment after creation." ; return 1; }
+        python3 -m venv "$HOME/.pico_venv" || { error "Failed to create virtual environment." ; return 1; }
+        source "$HOME/.pico_venv/bin/activate" || { error "Failed to activate virtual environment after creation." ; return 1; }
 
-        success "Virtual environment 'bine_venv' created and activated."
+        success "Virtual environment 'pico_venv' created and activated."
     fi
 
     if [[ "$LOCATION" != "mare_nostrum" ]]; then
@@ -557,13 +823,16 @@ activate_virtualenv() {
 ###############################################################################
 # Compile the codebase
 ###############################################################################
+# WARN: will be deprecated
 compile_code() {
     [[ "$BEAR_COMPILE" == "yes" ]] && make_command="bear -- make all" || make_command="make all" # Used to create compile_command.json file for lsp
     [[ "$DEBUG_MODE" == "yes" ]] && make_command+=" DEBUG=1" ||  make_command+=" -s"
+    [[ "$INSTRUMENT" == "yes" && "$GPU_AWARENESS" != "yes" ]] && make_command+=" PICO_INSTRUMENT=1" && inform "Instrumented build requested"
+
     if [[ "$GPU_AWARENESS" == "yes" ]]; then
       case "$GPU_LIB" in
         "CUDA")
-            make_command+=" CUDA_AWARE=1"
+            make_command+=" PICO_MPI_CUDA_AWARE=1"
             ;;
         # "HIP")
         #     make_command+=" HIP_AWARE=1"
@@ -590,56 +859,166 @@ compile_code() {
     return 0
 }
 
+# INFO: new function to compile libraries, will replace the previous one
+compile_all_libraries_tui() {
+    make clean
+
+    local count="${LIB_COUNT:-0}"
+    if ! [[ "$count" =~ ^[0-9]+$ ]] || (( count == 0 )); then
+        warning "LIB_COUNT is zero or unset; nothing to compile"
+        return 0
+    fi
+
+    local mk_debug=0
+    local mk_instr=0
+    [[ "$DEBUG_MODE" == "yes" ]] && mk_debug=1
+    [[ "$INSTRUMENT" == "yes" ]] && mk_instr=1
+
+    for (( i=0; i<count; i++ )); do
+        export_lib_identity "$i"   # sets: MPI_LIB, MPI_LIB_VERSION, PICOCC
+
+        local libmods="$(_get_var "LIB_${i}_MODULES")"
+        local load_type="$(_get_var "LIB_${i}_LOAD_TYPE")"
+
+        # CUDA build only if: GPU_AWARENESS=yes ∧ any GPU>0 ∧ GPU_LIB=cuda
+        local gaw="$(_get_var "LIB_${i}_GPU_AWARENESS")"
+        local gpn="$(_get_var "LIB_${i}_GPU_PER_NODE")"
+        local gpu_lib_raw="$(_get_var "LIB_${i}_GPU_LIB")"
+        local gpu_lib="${gpu_lib_raw,,}"   # lowercase
+
+        local any_gpu_nonzero=0
+        if [[ -n "$gpn" ]]; then
+            for n in ${gpn//,/ }; do
+                if [[ "$n" =~ ^[0-9]+$ ]] && (( n > 0 )); then any_gpu_nonzero=1; break; fi
+            done
+        fi
+        local need_cuda_build=0
+        if [[ "$gaw" == "yes" && $any_gpu_nonzero -eq 1 && "$gpu_lib" == "cuda" ]]; then
+            need_cuda_build=1
+        fi
+        local this_instrument=0
+        if [[ "$mk_instr" -eq 1 && "$any_gpu_nonzero" -eq 0 ]]; then
+            inform "Instrumented build requested for library $i"
+            this_instrument=1
+        fi
+
+        # -------- Activate per-lib context (module | set_env | default) --------
+        trace_env_snapshot "lib $i BEFORE apply/load"
+        activate_lib_context "$i" || { error "Failed to activate context for library $i"; return 1; }
+        [[ "$DEBUG_MODE" == "yes" ]] && inform "[lib $i] LOAD_TYPE=${load_type:-<unset>} modules=${libmods:-<none>}"
+        trace_env_snapshot "lib $i AFTER apply/load"
+        trace_compiler_wrapper "$PICOCC"
+
+        # Per-lib output dirs
+        local OUT_BIN="$PICO_DIR/bin/lib_${i}"
+        local OUT_LIB="$PICO_DIR/lib/lib_${i}"
+        local OUT_OBJ="$PICO_DIR/obj/lib_${i}"
+        mkdir -p "$OUT_BIN" "$OUT_LIB" "$OUT_OBJ" || true
+
+        # Single make call; top-level Makefile: all -> force_rebuild + build
+        local mk="make -C \"$PICO_DIR\" all"
+        mk+=" BIN_DIR=\"$OUT_BIN\" LIB_DIR=\"$OUT_LIB\""
+        mk+=" PICO_CORE_OBJ_DIR=\"$OUT_OBJ/pico_core\" PICO_CORE_OBJ_DIR_CUDA=\"$OUT_OBJ/pico_core_cuda\""
+        mk+=" LIB_OBJ_DIR=\"$OUT_OBJ/lib\" LIB_OBJ_DIR_CUDA=\"$OUT_OBJ/lib_cuda\""
+        mk+=" DEBUG=$mk_debug"
+        mk+=" PICO_INSTRUMENT=$this_instrument"
+        if (( need_cuda_build )); then mk+=" PICO_MPI_CUDA_AWARE=1"; fi
+
+        if [[ "$DEBUG_MODE" == "yes" ]]; then
+            echo -e "${BLUE}>>> [lib ${i}] Invoking build${NC}"
+            echo "  MPI_LIB:         ${MPI_LIB}"
+            echo "  MPI_LIB_VERSION: ${MPI_LIB_VERSION}"
+            echo "  PICOCC:          ${PICOCC}"
+            echo "  CMD:             PICOCC=\"${PICOCC}\" MPI_LIB=\"${MPI_LIB}\" ${mk}"
+        fi
+
+        if [[ "$DRY_RUN" == "yes" ]]; then
+            inform "Would run (lib $i): PICOCC=\"$PICOCC\" MPI_LIB=\"$MPI_LIB\" $mk"
+        else
+            PICOCC="$PICOCC" MPI_LIB="$MPI_LIB" eval "$mk" || { error "Compilation failed for library $i"; restore_lib_context "$i"; return 1; }
+        fi
+
+        # Export the per-lib execs if they exist
+        [[ -f "$OUT_BIN/pico_core" ]] && export "LIB_${i}_PICO_EXEC_CPU=$OUT_BIN/pico_core" && trace_ldd "$OUT_BIN/pico_core"
+        [[ -f "$OUT_BIN/pico_core_cuda" ]] && export "LIB_${i}_PICO_EXEC_GPU=$OUT_BIN/pico_core_cuda" && trace_ldd "$OUT_BIN/pico_core_cuda"
+
+        # Unload only this library's modules (keep general ones)
+        restore_lib_context "$i" || true
+    done
+
+    success "Per-library compilation completed."
+    return 0
+}
+export -f compile_all_libraries_tui
+
+###############################################################################
+# Calculate SLURM values (max tasks-per-node, max gpus-per-node, any gpu-aware)
+###############################################################################
+# Exports global caps across all libraries:
+#   ANY_GPU_AWARE="yes|no"
+#   MAX_TASKS_PER_NODE=<max of all CPU TASKS_PER_NODE and GPU_PER_NODE values>
+#   MAX_GPU_PER_NODE=<max of all GPU_PER_NODE values among GPU-aware libs>
+#   SLURM_TASKS_PER_NODE=max($MAX_TASKS_PER_NODE, $MAX_GPU_PER_NODE)
+compute_slurm_caps_from_libs() {
+    local count="${LIB_COUNT:-0}"
+    local max_tpn=""
+    local max_gpn=""
+    local any_gpu="no"
+
+    # Guard: nothing to do if LIB_COUNT not set or zero
+    if ! [[ "$count" =~ ^[0-9]+$ ]] || (( count == 0 )); then
+        export ANY_GPU_AWARE="no"
+        return 0
+    fi
+
+    for (( i=0; i<count; i++ )); do
+        local tpn_csv="$(_get_var "LIB_${i}_TASKS_PER_NODE")"
+        if [[ -n "$tpn_csv" ]]; then
+            local t
+            for t in ${tpn_csv//,/ }; do
+                [[ "$t" =~ ^[0-9]+$ ]] || continue
+                if [[ -z "$max_tpn" || "$t" -gt "$max_tpn" ]]; then
+                    max_tpn="$t"
+                fi
+            done
+        fi
+
+        local gaw_val="$(_get_var "LIB_${i}_GPU_AWARENESS")"
+        local gpn_csv="$(_get_var "LIB_${i}_GPU_PER_NODE")"
+        if [[ "$gaw_val" == "yes" && -n "$gpn_csv" ]]; then
+            any_gpu="yes"
+            local g
+            for g in ${gpn_csv//,/ }; do
+                [[ "$g" =~ ^[0-9]+$ ]] || continue
+                if [[ -z "$max_gpn" || "$g" -gt "$max_gpn" ]]; then
+                    max_gpn="$g"
+                fi
+                if [[ -z "$max_tpn" || "$g" -gt "$max_tpn" ]]; then
+                    max_tpn="$g"
+                fi
+            done
+        fi
+    done
+
+    export ANY_GPU_AWARE="$any_gpu"
+    [[ -n "$max_gpn" ]] && export MAX_GPU_PER_NODE="$max_gpn"
+    [[ -n "$max_tpn" ]] && export MAX_TASKS_PER_NODE="$max_tpn"
+
+    local _tpn="${MAX_TASKS_PER_NODE:-0}"
+    local _gpn="${MAX_GPU_PER_NODE:-0}"
+    local _slurm_tpn=$_tpn
+    (( _gpn > _slurm_tpn )) && _slurm_tpn=$_gpn
+    if (( _slurm_tpn > 0 )); then
+        export SLURM_TASKS_PER_NODE="$_slurm_tpn"
+    fi
+
+    return 0
+}
+export -f compute_slurm_caps_from_libs
+
 ###############################################################################
 # Sanity checks
 ###############################################################################
-print_formatted_list() {
-    local list_name="$1"
-    local list_items="$2"
-    local items_per_line="${3:-5}"  # Default to 5 items per line
-    local formatting="${4:-normal}" # Options: normal, numeric, size
-
-    echo "  • $list_name:"
-    if [[ -z "$list_items" ]]; then
-        echo "      None specified"
-        return
-    fi
-
-    case "$formatting" in
-        "numeric")
-            local i=1
-            for item in ${list_items//,/ }; do
-                echo "      ${i}. $item"
-                ((i++))
-            done
-            ;;
-        *)
-            echo -n "      "
-            local k=1
-            local total_items=$(echo ${list_items//,/ } | wc -w)
-            for item in ${list_items//,/ }; do
-                if (( k < total_items )); then
-                    echo -n "$item, "
-                    if (( k % items_per_line == 0 )); then
-                        echo
-                        echo -n "      "
-                    fi
-                else
-                    echo "$item"
-                fi
-                ((k++))
-            done
-            ;;
-    esac
-}
-export -f print_formatted_list
-
-print_section_header() {
-    echo -e "\n\n"
-    success "${SEPARATOR}\n\t\t\t\t${1}\n${SEPARATOR}"
-}
-export -f print_section_header
-
 print_sanity_checks() {
     print_section_header "📊 CONFIGURATION SUMMARY"
 
@@ -855,3 +1234,341 @@ load_other_env_var(){
 }
 export -f load_other_env_var
 
+
+__csv_to_array() {
+  local csv="$1"; local -n out_ref=$2
+  out_ref=()
+  [[ -z "$csv" ]] && return 0
+  local tok
+  IFS=',' read -r -a out_ref <<< "$csv"
+  # trim whitespace around tokens
+  for (( __i=0; __i<${#out_ref[@]}; __i++ )); do
+    tok="${out_ref[__i]}"
+    tok="${tok##+([[:space:]])}"; tok="${tok%%+([[:space:]])}"
+    out_ref[__i]="$tok"
+  done
+}
+export -f __csv_to_array
+
+
+
+###############################################################################
+# Per-library context: apply/restore (module | set_env | default)
+###############################################################################
+activate_lib_context() {
+    local i="$1"
+    local load_type="$(_get_var "LIB_${i}_LOAD_TYPE")"
+    local libmods="$(_get_var "LIB_${i}_MODULES")"
+
+    case "$load_type" in
+        module)
+            [[ -n "$libmods" ]] && load_modules "$libmods" || { error "LIB_${i}: no MODULES to load"; return 1; }
+            ;;
+        set_env)
+            apply_lib_env "$i" || { error "LIB_${i}: set_env requested but no env vars found"; return 1; }
+            ;;
+        ""|default)
+            : # nothing
+            ;;
+        *)
+            warning "LIB_${i}: unknown LOAD_TYPE='$load_type'; proceeding without env change"
+            ;;
+    esac
+    return 0
+}
+export -f activate_lib_context
+
+restore_lib_context() {
+    local i="$1"
+    local load_type="$(_get_var "LIB_${i}_LOAD_TYPE")"
+    local libmods="$(_get_var "LIB_${i}_MODULES")"
+
+    case "$load_type" in
+        module)   [[ -n "$libmods" ]] && unload_modules "$libmods" || true ;;
+        set_env)  restore_lib_env "$i" || true ;;
+        ""|default) : ;;
+        *) : ;;
+    esac
+    return 0
+}
+export -f restore_lib_context
+
+###############################################################################
+# Per-library exports (compiler/lib identity) used by helpers & sanity prints
+###############################################################################
+export_lib_identity() {
+    local i="$1"
+    export MPI_LIB="$(_get_var "LIB_${i}_MPI_LIB")"
+    export MPI_LIB_VERSION="$(_get_var "LIB_${i}_MPI_LIB_VERSION")"
+    export PICOCC="$(_get_var "LIB_${i}_PICOCC")"
+}
+export -f export_lib_identity
+
+###############################################################################
+# Prepare per-collective legacy-compatible vars (ALGOS, SKIP, IS_SEGMENTED, CVARS?)
+# Sets:
+#   COLLECTIVE_TYPE, ALGOS, SKIP, IS_SEGMENTED (array), CVARS (array if MPICH-family)
+# Returns 0 on success, 1 to skip collective (e.g. no algorithms)
+###############################################################################
+prepare_collective_vars() {
+    local i="$1" coll="$2"
+    local COLL_UPPER="${coll^^}"
+
+    export COLLECTIVE_TYPE="$COLL_UPPER"
+
+    local ALGS_CSV="$(_get_var "LIB_${i}_${COLL_UPPER}_ALGORITHMS")"
+    if [[ -z "$ALGS_CSV" ]]; then
+        warning "LIB_${i} ${coll}: no algorithms; skipping"
+        return 1
+    fi
+    IFS=',' read -r -a _ALG_NAMES <<< "$ALGS_CSV"
+    export ALGOS="${ALGS_CSV//,/ }"
+
+    local SKIPS_CSV="$(_get_var "LIB_${i}_${COLL_UPPER}_ALGORITHMS_SKIP")"
+    IFS=',' read -r -a _SKIP_FLAGS <<< "$SKIPS_CSV"
+    export SKIP="${SKIPS_CSV//,/ }"
+
+    local SEG_CSV="$(_get_var "LIB_${i}_${COLL_UPPER}_ALGORITHMS_IS_SEGMENTED")"
+    if [[ -z "$SEG_CSV" ]]; then
+        IS_SEGMENTED=()
+        for ((k=0; k<${#_ALG_NAMES[@]}; k++)); do IS_SEGMENTED+=(no); done
+    else
+        IFS=',' read -r -a IS_SEGMENTED <<< "$SEG_CSV"
+        if (( ${#IS_SEGMENTED[@]} < ${#_ALG_NAMES[@]} )); then
+            for ((k=${#IS_SEGMENTED[@]}; k<${#_ALG_NAMES[@]}; k++)); do IS_SEGMENTED+=(no); done
+        elif (( ${#IS_SEGMENTED[@]} > ${#_ALG_NAMES[@]} )); then
+            IS_SEGMENTED=( "${IS_SEGMENTED[@]:0:${#_ALG_NAMES[@]}}" )
+        fi
+    fi
+
+    unset CVARS
+    if [[ "$MPI_LIB" == "MPICH" || "$MPI_LIB" == "CRAY_MPICH" ]]; then
+        local CVARS_CSV="$(_get_var "LIB_${i}_${COLL_UPPER}_ALGORITHMS_CVARS")"
+        if [[ -z "$CVARS_CSV" ]]; then
+            error "LIB_${i} ${coll}: MPICH-family requires ${COLL_UPPER}_ALGORITHMS_CVARS"
+            return 1
+        fi
+        IFS=',' read -r -a CVARS <<< "$CVARS_CSV"
+    fi
+
+    return 0
+}
+export -f prepare_collective_vars
+
+###############################################################################
+# Run one test “mode” (CPU or GPU) for a given lib/collective & concurrency
+# Inputs (exports expected to be set by caller):
+#   - COLLECTIVE_TYPE, ALGOS, SKIP, IS_SEGMENTED[], (CVARS[])
+#   - N_NODES, TYPES, SIZES, DEBUG_MODE, DRY_RUN
+#   - PICO_EXEC, CURRENT_TASKS_PER_NODE, MPI_TASKS, GPU_AWARENESS
+# Side-effects:
+#   - generates metadata (unless debug/dry)
+#   - prints sanity and calls run_all_tests
+###############################################################################
+run_mode_once() {
+    local -n _iter_ref=$1  # pass-by-name: iter variable name
+
+    load_other_env_var
+
+    if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
+        export DATA_DIR="$OUTPUT_DIR/${_iter_ref}"
+        mkdir -p "$DATA_DIR"
+        python3 "$PICO_DIR/results/generate_metadata.py" "${_iter_ref}" || return 1
+    fi
+
+    print_sanity_checks
+    run_all_tests
+    ((_iter_ref++))
+    return 0
+}
+export -f run_mode_once
+
+###############################################################################
+# Per-lib: run GPU loop (if any) and CPU loop
+# Chooses PICO_EXEC from per-lib compiled paths with fallback to global ones
+###############################################################################
+run_collective_for_lib() {
+    local i="$1" coll="$2"
+    local iter_name="$3" # name of the iter variable to bump
+
+    # 1) Make legacy compatibles for this collective
+    prepare_collective_vars "$i" "$coll" || return 0
+
+    # 2) Resolve execs compiled for this library
+    local LIB_PICO_CPU="$(_get_var "LIB_${i}_PICO_EXEC_CPU")"
+    local LIB_PICO_GPU="$(_get_var "LIB_${i}_PICO_EXEC_GPU")"
+
+    # 3) GPU loop (if awareness yes)
+    local gaw="$(_get_var "LIB_${i}_GPU_AWARENESS")"
+    local gpn_csv="$(_get_var "LIB_${i}_GPU_PER_NODE")"
+    if [[ "$gaw" == "yes" && -n "$gpn_csv" ]]; then
+        for n_gpu in ${gpn_csv//,/ }; do
+            [[ "$n_gpu" =~ ^[0-9]+$ ]] || continue
+            (( n_gpu == 0 )) && continue
+            export GPU_AWARENESS="yes"
+            export CURRENT_TASKS_PER_NODE=$n_gpu
+            export MPI_TASKS=$(( N_NODES * n_gpu ))
+            export PICO_EXEC="${LIB_PICO_GPU:-$PICO_EXEC_GPU}"
+            run_mode_once "$iter_name" || return 1
+        done
+    fi
+
+    # 4) CPU loop
+    local tpn_csv="$(_get_var "LIB_${i}_TASKS_PER_NODE")"
+    if [[ -n "$tpn_csv" ]]; then
+        for ntasks in ${tpn_csv//,/ }; do
+            [[ "$ntasks" =~ ^[0-9]+$ ]] || continue
+            export GPU_AWARENESS="no"
+            export CURRENT_TASKS_PER_NODE=$ntasks
+            export MPI_TASKS=$(( N_NODES * CURRENT_TASKS_PER_NODE ))
+            export PICO_EXEC="${LIB_PICO_CPU:-$PICO_EXEC_CPU}"
+
+            if [[ -n "$FORCE_TASKS" ]]; then
+                export MPI_TASKS=$FORCE_TASKS
+                export CURRENT_TASKS_PER_NODE=$(( FORCE_TASKS / N_NODES ))
+            fi
+
+            run_mode_once "$iter_name" || return 1
+
+            if [[ -n "$FORCE_TASKS" ]]; then
+                warning "--ntasks set; skipping remaining ntasks-per-node for this lib/collective"
+                break
+            fi
+        done
+    fi
+    return 0
+}
+export -f run_collective_for_lib
+
+###############################################################################
+# Per-lib: drive all collectives for a library index
+###############################################################################
+run_library_tui() {
+    local i="$1"
+    local iter_name="$2"  # name of outer iter variable
+
+    # Export per-lib identity so helpers & prints show correct lib
+    export_lib_identity "$i" || return 1
+
+    # Activate the library runtime context
+    activate_lib_context "$i" || return 1
+
+    # Per-lib collectives list
+    local lib_collectives="$(_get_var "LIB_${i}_COLLECTIVES")"
+    if [[ -z "$lib_collectives" ]]; then
+        warning "LIB_${i}: no COLLECTIVES; skipping"
+        restore_lib_context "$i"
+        return 0
+    fi
+
+    # Info
+    local name="$(_get_var "LIB_${i}_NAME")"
+    local ver="$(_get_var "LIB_${i}_VERSION")"
+    inform "▶ Running library $i: ${name:-<unknown>} ${ver:-}"
+
+    for coll in ${lib_collectives//,/ }; do
+        run_collective_for_lib "$i" "$coll" "$iter_name" || { restore_lib_context "$i"; return 1; }
+    done
+
+    restore_lib_context "$i"
+    return 0
+}
+export -f run_library_tui
+
+
+
+
+##################################################################################
+# CLI mode functions (outer loops, env prep, metadata, sanity, run)
+##################################################################################
+# WARN: TO BE DEPRECATED
+
+# Decide awareness / tasks / exec for a single n_gpu value
+cli_set_awareness_and_tasks() {
+    local n_gpu="$1"
+    if [[ "$n_gpu" == "0" ]]; then
+        export GPU_AWARENESS="no"
+        export PICO_EXEC="$PICO_EXEC_CPU"
+        # CURRENT_TASKS_PER_NODE will be set by the CPU inner loop
+    else
+        export GPU_AWARENESS="yes"
+        export CURRENT_TASKS_PER_NODE="$n_gpu"
+        export MPI_TASKS=$(( N_NODES * CURRENT_TASKS_PER_NODE ))
+        export PICO_EXEC="$PICO_EXEC_GPU"
+    fi
+}
+export -f cli_set_awareness_and_tasks
+
+# Prepare env for one iteration (parse + load test env)
+cli_prepare_iteration_env() {
+    # parse JSON -> TEST_ENV + export vars
+    python3 "$PICO_DIR/config/parse_test.py" || return 1
+    source "$TEST_ENV"
+    load_other_env_var
+    return 0
+}
+export -f cli_prepare_iteration_env
+
+# Create metadata dir (if enabled) and call generator; name-ref for iter
+cli_prepare_metadata() {
+    local -n _iter_ref=$1
+    if [[ "$DEBUG_MODE" == "no" && "$DRY_RUN" == "no" ]]; then
+        export DATA_DIR="$OUTPUT_DIR/${_iter_ref}"
+        mkdir -p "$DATA_DIR"
+        python3 "$PICO_DIR/results/generate_metadata.py" "${_iter_ref}" || return 1
+        success "📂 Metadata of $DATA_DIR created"
+    fi
+    return 0
+}
+export -f cli_prepare_metadata
+
+# One full iteration run (env already set): print summary + run tests; name-ref iter++
+cli_run_one_iteration() {
+    local -n _iter_ref=$1
+    print_sanity_checks
+    run_all_tests
+    ((_iter_ref++))
+}
+export -f cli_run_one_iteration
+
+# CPU inner loop for one config; pass the *name* of the iter variable
+cli_run_cpu_set() {
+    local iter_name="$1"          # raw name of the iter var (e.g., "iter")
+    local -n _iter_ref="$iter_name"  # local nameref for convenience
+
+    for ntasks in ${TASKS_PER_NODE//,/ }; do
+        export CURRENT_TASKS_PER_NODE="$ntasks"
+        export MPI_TASKS=$(( N_NODES * CURRENT_TASKS_PER_NODE ))
+
+        if [[ -n "$FORCE_TASKS" ]]; then
+            export MPI_TASKS="$FORCE_TASKS"
+            export CURRENT_TASKS_PER_NODE=$(( FORCE_TASKS / N_NODES ))
+        fi
+
+        cli_prepare_iteration_env || { error "Failed to prepare test env (CPU)"; return 1; }
+        success "📄 Config ${TEST_CONFIG} parsed (CPU, ntasks=${CURRENT_TASKS_PER_NODE})"
+
+        # pass the ORIGINAL name downstream
+        cli_prepare_metadata "$iter_name" || return 1
+        cli_run_one_iteration "$iter_name"
+
+        if [[ -n "$FORCE_TASKS" ]]; then
+            warning "--ntasks is set, skipping possible --tasks-per-node values"
+            break
+        fi
+    done
+}
+export -f cli_run_cpu_set
+
+# GPU path for one n_gpu; pass the *name* of the iter variable
+cli_run_gpu_once() {
+    local iter_name="$1"           # raw name
+    local -n _iter_ref="$iter_name"
+
+    cli_prepare_iteration_env || { error "Failed to prepare test env (GPU)"; return 1; }
+    success "📄 Config ${TEST_CONFIG} parsed (GPU, gpus per node=${CURRENT_TASKS_PER_NODE})"
+
+    cli_prepare_metadata "$iter_name" || return 1
+    cli_run_one_iteration "$iter_name"
+}
+export -f cli_run_gpu_once

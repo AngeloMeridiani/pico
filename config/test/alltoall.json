@@ -1,5 +1,5 @@
 {
-  "libbine_version": "1.0.0",
+  "libpico_version": "1.0.0",
   "collective": "ALLTOALL",
   "MPI_Op": "MPI_SUM",
   "tags": {

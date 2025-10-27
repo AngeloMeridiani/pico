@@ -21,6 +21,16 @@ DTYPE_TO_BYTES = {
 }
 
 
+def _meta_value(meta_row: pd.Series, column: str):
+    """Return column value from metadata row, normalising missing/null entries."""
+    if column not in meta_row.index:
+        return None
+    value = meta_row[column]
+    if isinstance(value, str) and value.lower() == "null":
+        return None
+    return value
+
+
 def process_benchmark_file(file_path, warmup_ratio=0.2):
     """
     Read a benchmark CSV file, discard the warmup iterations,
@@ -124,28 +134,10 @@ def parse_filename(filename):
         'buffer_size': buffer_size
     }
 
-    """
-    pattern = r"(?P<array_dim>\d+)_(?P<algo_name>.+)_(?P<dtype>[^_]+)\.csv"
-    match = re.match(pattern, filename)
-    if match:
-        params = match.groupdict()
-        try:
-            array_dim = int(params['array_dim'])
-            dtype = params['dtype']
-            dtype_size = DTYPE_TO_BYTES.get(dtype, 4)  # Default to 4 bytes if unknown
-            buffer_size = array_dim * dtype_size
-        except (ValueError, KeyError) as e:
-            print(f"Error processing filename {filename}: {str(e)}", file=sys.stderr)
-            buffer_size = None
-        return {
-            'array_dim': array_dim,
-            'algo_name': params['algo_name'],
-            'dtype': dtype,
-            'buffer_size': buffer_size
-        }
-    else:
-        return {'array_dim': None, 'algo_name': None, 'dtype': None, 'buffer_size': None}
-    """
+    # Legacy regex-based parser kept for reference:
+    # pattern = re.compile(r"(?P<array_dim>\d+)_(?P<algo_name>.+)_(?P<dtype>[^_]+)\.csv")
+    # match = pattern.match(filename)
+    # ...
 
 def aggregate_results(results_dir: os.PathLike, metadata: pd.DataFrame, target_timestamp: str, system_name: str) -> pd.DataFrame:
     """
@@ -169,7 +161,7 @@ def aggregate_results(results_dir: os.PathLike, metadata: pd.DataFrame, target_t
                 file_params = parse_filename(file)
 
                 result = {
-                    'collective_type': meta_row['collective_type'],
+                    'collective_type': _meta_value(meta_row, 'collective_type'),
                     'array_dim': file_params.get('array_dim'),
                     'buffer_size': file_params.get('buffer_size'),
                     'algo_name': file_params.get('algo_name'),
@@ -179,8 +171,8 @@ def aggregate_results(results_dir: os.PathLike, metadata: pd.DataFrame, target_t
                     'std': stats['std'],
                     'min': stats['min'],
                     'max': stats['max'],
-                    'nnodes': meta_row['nnodes'],
-                    'tasks_per_node': meta_row['tasks_per_node'],
+                    'nnodes': _meta_value(meta_row, 'nnodes'),
+                    'tasks_per_node': _meta_value(meta_row, 'tasks_per_node'),
                     'n_iter': stats['n_iter'],
                     'percentile_10': stats['percentile_10'],
                     'percentile_25': stats['percentile_25'],
@@ -195,14 +187,14 @@ def aggregate_results(results_dir: os.PathLike, metadata: pd.DataFrame, target_t
                     'system': system_name,
                     'timestamp': target_timestamp,
                     'test_id': str(test_id),
-                    'MPI_Op': meta_row['MPI_Op'],
-                    'gpu_awareness': meta_row['gpu_awareness'],
-                    'gpu_lib': meta_row['gpu_lib'],
-                    'gpu_lib_version': meta_row['gpu_lib_version'],
-                    'notes': meta_row['notes'],
-                    'mpi_lib': meta_row['mpi_lib'],
-                    'mpi_lib_version': meta_row['mpi_lib_version'],
-                    'libbine_version': meta_row['libbine_version']
+                    'MPI_Op': _meta_value(meta_row, 'MPI_Op'),
+                    'gpu_awareness': _meta_value(meta_row, 'gpu_awareness'),
+                    'gpu_lib': _meta_value(meta_row, 'gpu_lib'),
+                    'gpu_lib_version': _meta_value(meta_row, 'gpu_lib_version'),
+                    'notes': _meta_value(meta_row, 'notes'),
+                    'mpi_lib': _meta_value(meta_row, 'mpi_lib'),
+                    'mpi_lib_version': _meta_value(meta_row, 'mpi_lib_version'),
+                    'libpico_version': _meta_value(meta_row, 'libpico_version'),
                 }
                 all_results.append(result)
     return pd.DataFrame(all_results)

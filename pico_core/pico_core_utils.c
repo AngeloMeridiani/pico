@@ -14,6 +14,7 @@
 #include <stdbool.h>
 
 #include "pico_core_utils.h"
+#include "pico_mpi_nccl_mapper.h"
 
 /**
  * @brief Converts a string to a `coll_t` enum value.
@@ -67,7 +68,7 @@ static inline allocator_func_ptr get_allocator(coll_t collective) {
   }
 }
 
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
 static inline allocator_func_ptr get_allocator_cuda(coll_t collective) {
   switch (collective) {
     case ALLREDUCE:
@@ -101,17 +102,20 @@ static inline allocator_func_ptr get_allocator_cuda(coll_t collective) {
 * defauls to the internal allreduce function.
 */
 static inline allreduce_func_ptr get_allreduce_function(const char *algorithm) {
+#ifndef PICO_NCCL
   CHECK_STR(algorithm, "recursive_doubling_over", allreduce_recursivedoubling);
   CHECK_STR(algorithm, "ring_over", allreduce_ring);
   CHECK_STR(algorithm, "rabenseifner_over", allreduce_rabenseifner);
   CHECK_STR(algorithm, "bine_lat_over", allreduce_bine_lat);
-  CHECK_STR(algorithm, "bine_bdw_static_over", allreduce_bine_bdw_static);
   CHECK_STR(algorithm, "bine_bdw_remap_over", allreduce_bine_bdw_remap);
   CHECK_STR(algorithm, "bine_bdw_remap_segmented_over", allreduce_bine_bdw_remap_segmented);
   CHECK_STR(algorithm, "bine_block_by_block_any_even", allreduce_bine_block_by_block_any_even);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Allreduce");
   return allreduce_wrapper;
+#else
+  return ncclAllReduce;
+#endif
 }
 
 /**
@@ -123,21 +127,22 @@ static inline allreduce_func_ptr get_allreduce_function(const char *algorithm) {
 * defauls to the internal allgather function.
 */
 static inline allgather_func_ptr get_allgather_function(const char *algorithm) {
+#ifndef PICO_NCCL
   CHECK_STR(algorithm, "k_bruck_over", allgather_k_bruck);
   CHECK_STR(algorithm, "recursive_doubling_over", allgather_recursivedoubling);
   CHECK_STR(algorithm, "ring_over", allgather_ring);
   CHECK_STR(algorithm, "sparbit_over", allgather_sparbit);
   CHECK_STR(algorithm, "bine_block_by_block_over_any_even", allgather_bine_block_by_block_any_even);
   CHECK_STR(algorithm, "bine_block_by_block_over", allgather_bine_block_by_block);
-  CHECK_STR(algorithm, "bine_permute_static_over", allgather_bine_permute_static);
-  CHECK_STR(algorithm, "bine_send_static_over", allgather_bine_send_static);
-  CHECK_STR(algorithm, "bine_permute_remap_over", allgather_bine_permute_remap);
   CHECK_STR(algorithm, "bine_send_remap_over", allgather_bine_send_remap);
   CHECK_STR(algorithm, "bine_2_blocks_over", allgather_bine_2_blocks);
   CHECK_STR(algorithm, "bine_2_blocks_dtype_over", allgather_bine_2_blocks_dtype);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Allgather");
   return allgather_wrapper;
+#else
+  return ncclAllGather;
+#endif
 }
 
 /**
@@ -149,10 +154,15 @@ static inline allgather_func_ptr get_allgather_function(const char *algorithm) {
 * defauls to the internal alltoall function.
 */
 static inline alltoall_func_ptr get_alltoall_function(const char *algorithm) {
+#ifndef PICO_NCCL
   CHECK_STR(algorithm, "bine_over", alltoall_bine);
+  CHECK_STR(algorithm, "pairwise_ompi_over", alltoall_pairwise_ompi);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Alltoall");
   return alltoall_wrapper;
+#else
+  return ncclAllToAll;
+#endif
 }
 
 /**
@@ -164,17 +174,19 @@ static inline alltoall_func_ptr get_alltoall_function(const char *algorithm) {
 * defauls to the internal bcast function.
 */
 static inline bcast_func_ptr get_bcast_function(const char *algorithm) {
+#ifndef PICO_NCCL
   CHECK_STR(algorithm, "scatter_allgather_over", bcast_scatter_allgather);
   CHECK_STR(algorithm, "bine_lat_over", bcast_bine_lat);
   CHECK_STR(algorithm, "bine_lat_reversed_over", bcast_bine_lat_reversed);
   CHECK_STR(algorithm, "bine_lat_new_over", bcast_bine_lat_new);
   CHECK_STR(algorithm, "bine_lat_i_new_over", bcast_bine_lat_i_new);
-  CHECK_STR(algorithm, "bine_bdw_static_over", bcast_bine_bdw_static);
-  // CHECK_STR(algorithm, "bine_bdw_static_reversed_over", bcast_bine_bdw_static_reversed);
   CHECK_STR(algorithm, "bine_bdw_remap_over", bcast_bine_bdw_remap);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Bcast");
   return bcast_wrapper;
+#else
+  return ncclBcast;
+#endif
 }
 
 
@@ -187,10 +199,14 @@ static inline bcast_func_ptr get_bcast_function(const char *algorithm) {
 * defauls to the internal gather function.
 */
 static inline gather_func_ptr get_gather_function(const char *algorithm) {
+#ifndef PICO_NCCL
   CHECK_STR(algorithm, "bine_over", gather_bine);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Gather");
   return gather_wrapper;
+#else
+  return ncclGather;
+#endif
 }
 
 
@@ -203,11 +219,15 @@ static inline gather_func_ptr get_gather_function(const char *algorithm) {
 * defauls to the internal reduce function.
 */
 static inline reduce_func_ptr get_reduce_function(const char *algorithm) {
+#ifndef PICO_NCCL
   CHECK_STR(algorithm, "bine_lat_over", reduce_bine_lat);
   CHECK_STR(algorithm, "bine_bdw_over", reduce_bine_bdw);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Reduce");
   return reduce_wrapper;
+#else
+  return ncclReduce;
+#endif
 }
 
 /**
@@ -219,11 +239,11 @@ static inline reduce_func_ptr get_reduce_function(const char *algorithm) {
 * defauls to the internal reduce scatter function.
 */
 static inline reduce_scatter_func_ptr get_reduce_scatter_function (const char *algorithm){
+#ifndef PICO_NCCL
   CHECK_STR(algorithm, "recursive_halving_over", reduce_scatter_recursivehalving);
   CHECK_STR(algorithm, "recursive_distance_doubling_over", reduce_scatter_recursive_distance_doubling);
   CHECK_STR(algorithm, "ring_over", reduce_scatter_ring);
   CHECK_STR(algorithm, "butterfly_over", reduce_scatter_butterfly);
-  CHECK_STR(algorithm, "bine_static_over", reduce_scatter_bine_static);
   CHECK_STR(algorithm, "bine_send_remap_over", reduce_scatter_bine_send_remap);
   CHECK_STR(algorithm, "bine_permute_remap_over", reduce_scatter_bine_permute_remap);  
   CHECK_STR(algorithm, "bine_block_by_block_over", reduce_scatter_bine_block_by_block);
@@ -231,6 +251,9 @@ static inline reduce_scatter_func_ptr get_reduce_scatter_function (const char *a
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Reduce_scatter");
   return MPI_Reduce_scatter;
+#else
+  return ncclReduceScatter;
+#endif
 }
 
 /**
@@ -242,10 +265,14 @@ static inline reduce_scatter_func_ptr get_reduce_scatter_function (const char *a
 * defauls to the internal scatter function.
 */
 static inline scatter_func_ptr get_scatter_function (const char *algorithm){
+#ifndef PICO_NCCL
   CHECK_STR(algorithm, "bine_over", scatter_bine);
 
   PICO_CORE_DEBUG_PRINT_STR("MPI_Scatter");
   return scatter_wrapper;
+#else
+  return ncclScatter;
+#endif
 }
 
 int get_routine(test_routine_t *test_routine, const char *algorithm) {
@@ -273,7 +300,7 @@ int get_routine(test_routine_t *test_routine, const char *algorithm) {
     fprintf(stderr, "Error! Allocator is NULL. Aborting...");
     return -1;
   }
-  #ifdef CUDA_AWARE
+  #if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   test_routine->allocator_cuda = get_allocator_cuda(test_routine->collective);
   #endif
 
@@ -309,7 +336,7 @@ int get_routine(test_routine_t *test_routine, const char *algorithm) {
   }
 
   is_segmented = getenv("SEGMENTED");
-  if(strcmp(is_segmented, "yes") == 0) { 
+  if(is_segmented != NULL && strcmp(is_segmented, "yes") == 0) { 
     segsize = getenv("SEGSIZE");
     if(segsize == NULL) {
       return -1;
@@ -365,18 +392,30 @@ int get_data_saving_options(test_routine_t *test_routine, size_t count,
     return -1;
   }
 
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
   if (test_routine->segsize != 0) {
-    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%ld_%s.csv", count, algorithm, test_routine->segsize, type_string);
+    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%ld_%s_instrument.csv",
+             count, algorithm, test_routine->segsize, type_string);
   } else {
-    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%s.csv", count, algorithm, type_string);
+    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%s_instrument.csv",
+             count, algorithm, type_string);
   }
+#else
+  if (test_routine->segsize != 0) {
+    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%ld_%s.csv",
+             count, algorithm, test_routine->segsize, type_string);
+  } else {
+    snprintf(data_filename, sizeof(data_filename), "/%ld_%s_%s.csv",
+             count, algorithm, type_string);
+  }
+#endif
 
   if(concatenate_path(data_dir, data_filename, test_routine->output_data_file) == -1) {
     fprintf(stderr, "Error: Failed to concatenate path. Aborting...");
     return -1;
   }
 
-#ifndef CUDA_AWARE
+#if !defined PICO_MPI_CUDA_AWARE && !defined PICO_NCCL
   snprintf(alloc_filename, sizeof(alloc_filename), "/alloc_%d.csv", comm_sz);
 #else
   snprintf(alloc_filename, sizeof(alloc_filename), "/alloc_%d_GPU.csv", comm_sz);
@@ -402,7 +441,7 @@ int get_data_saving_options(test_routine_t *test_routine, size_t count,
 }
 
 
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
 int coll_memcpy_host_to_device(void** d_buf, void** buf, size_t count, size_t type_size, coll_t coll) {
 
   int comm_sz, rank;
@@ -431,7 +470,7 @@ int coll_memcpy_host_to_device(void** d_buf, void** buf, size_t count, size_t ty
     case REDUCE:
       PICO_CORE_CUDA_CHECK(cudaMemcpy(*d_buf, *buf, count * type_size, cudaMemcpyHostToDevice), err);
       break;
-    case REDUCE_SCATTER;
+    case REDUCE_SCATTER:
       PICO_CORE_CUDA_CHECK(cudaMemcpy(*d_buf, *buf, count * type_size, cudaMemcpyHostToDevice), err);
       break;
     case SCATTER:
@@ -479,7 +518,7 @@ int coll_memcpy_device_to_host(void** d_buf, void** buf, size_t count, size_t ty
         PICO_CORE_CUDA_CHECK(cudaMemcpy(*buf, *d_buf, count * type_size, cudaMemcpyDeviceToHost), err);
       }
       break;
-    case REDUCE_SCATTER;
+    case REDUCE_SCATTER:
       PICO_CORE_CUDA_CHECK(cudaMemcpy(*buf, *d_buf, (count / (size_t) comm_sz) * type_size, cudaMemcpyDeviceToHost), err);
       break;
     case SCATTER:
@@ -492,8 +531,63 @@ int coll_memcpy_device_to_host(void** d_buf, void** buf, size_t count, size_t ty
 
   return 0;
 }
-#endif // CUDA_AWARE
+#endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
 
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+int run_coll_once(test_routine_t test_routine, void *sbuf, void *rbuf,
+                   size_t count, MPI_Datatype dtype, MPI_Comm comm){
+  int rank, comm_sz, ret, *rcounts = NULL;
+
+  MPI_Comm_rank(comm, &rank);
+  MPI_Comm_size(comm, &comm_sz);
+
+  size_t local_count = count / (size_t) comm_sz; /**< Rank count for collectives with distributed data */
+
+  switch (test_routine.collective){
+    case ALLREDUCE:
+      ret = test_routine.function.allreduce(sbuf, rbuf, count, dtype, MPI_SUM, comm);
+      break;
+    case ALLGATHER:
+      ret = test_routine.function.allgather(sbuf, local_count, dtype,
+                            rbuf, local_count, dtype, comm);
+      break;
+    case ALLTOALL:
+      ret = test_routine.function.alltoall(sbuf, local_count, dtype,
+                           rbuf, local_count, dtype, comm);
+      
+    break;
+    case BCAST:
+      ret = test_routine.function.bcast(sbuf, count, dtype, 0, comm);
+      break;
+    case GATHER:
+      ret = test_routine.function.gather(sbuf, local_count, dtype,
+                         rbuf, local_count, dtype, 0, comm);
+    
+      break;
+    case REDUCE:
+      ret = test_routine.function.reduce(sbuf, rbuf, count, dtype, MPI_SUM, 0, comm);
+      break;
+    case REDUCE_SCATTER:
+      rcounts = (int *)malloc(comm_sz * sizeof(int));
+      for(int i = 0; i < comm_sz; i++) { rcounts[i] = local_count; }
+      ret = test_routine.function.reduce_scatter(sbuf, rbuf, rcounts, dtype, MPI_SUM, comm);
+      free(rcounts);
+      break;
+    case SCATTER:
+      ret = test_routine.function.scatter(sbuf, local_count, dtype,
+                          rbuf, local_count, dtype, 0, comm);
+      break;
+    default:
+      fprintf(stderr, "still not implemented, aborting...");
+      return -1;
+  }
+  return ret;
+
+}
+#endif
+
+
+#ifndef PICO_NCCL
 int test_loop(test_routine_t test_routine, void *sbuf, void *rbuf, size_t count,
               MPI_Datatype dtype, MPI_Comm comm, int iter, double *times){
   int rank, comm_sz, ret, *rcounts = NULL;
@@ -549,6 +643,56 @@ int test_loop(test_routine_t test_routine, void *sbuf, void *rbuf, size_t count,
   }
   return ret;
 }
+#else
+int test_loop(test_routine_t test_routine, void *sbuf, void *rbuf, size_t count,
+              ncclDataType_t dtype, ncclComm_t nccl_comm, cudaStream_t stream, int iter, double *times){
+  int rank, comm_sz, ret;
+
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
+
+  size_t local_count = count / (size_t) comm_sz;
+
+  switch (test_routine.collective){
+    case ALLREDUCE:
+      ret = allreduce_test_loop(sbuf, rbuf, count, dtype, ncclSum, nccl_comm, stream,
+                                iter, times, test_routine);
+      break;
+    case ALLGATHER:
+      ret = allgather_test_loop(sbuf, rbuf, local_count, dtype, nccl_comm, stream,
+                                iter, times, test_routine);
+      break;
+    case ALLTOALL:
+      ret = alltoall_test_loop(sbuf, rbuf, local_count, dtype, nccl_comm, stream,
+                               iter, times, test_routine);
+    break;
+    case BCAST:
+      ret = bcast_test_loop(sbuf, count, dtype, 0, nccl_comm, stream, 
+                            iter, times, test_routine);
+      break;
+    case GATHER:
+      ret = gather_test_loop(sbuf, rbuf, local_count, dtype, 0, nccl_comm, stream,
+                             iter, times, test_routine);
+      break;
+    case REDUCE:
+      ret = reduce_test_loop(sbuf, rbuf, count, dtype, ncclSum, 0, nccl_comm, stream,
+                             iter, times, test_routine);
+      break;
+    case REDUCE_SCATTER:
+      ret = reduce_scatter_test_loop(sbuf, rbuf, local_count, dtype, ncclSum, nccl_comm, stream,
+                                iter, times, test_routine);
+      break;
+    case SCATTER:
+      ret = scatter_test_loop(sbuf, rbuf, local_count, dtype, 0, nccl_comm, stream,
+                              iter, times, test_routine);
+      break;
+    default:
+      fprintf(stderr, "still not implemented, aborting...");
+      return -1;
+  }
+  return ret;
+}
+#endif
 
 int ground_truth_check(test_routine_t test_routine, void *sbuf, void *rbuf,
                        void *rbuf_gt, size_t count, MPI_Datatype dtype, MPI_Comm comm){
@@ -637,48 +781,6 @@ int get_command_line_arguments(int argc, char** argv, size_t *array_count, int* 
   return 0;
 }
 
-
-/**
- * @struct TypeMap
- * @brief Maps type names to corresponding MPI data types and sizes.
- */
-typedef struct {
-  const char* t_string;   /**< Type name as a string. */
-  MPI_Datatype mpi_type;  /**< Corresponding MPI datatype. */
-  size_t t_size;          /**< Size of the datatype in bytes. */
-} TypeMap;
-
-/**
- * @brief Static array mapping string representations to MPI datatypes. Will be
- *        used to map command-line input argument to datatype and its size.
- */
-const static TypeMap type_map[] = {
-  {"int8",          MPI_INT8_T,         sizeof(int8_t)},
-  {"int16",         MPI_INT16_T,        sizeof(int16_t)},
-  {"int32",         MPI_INT32_T,        sizeof(int32_t)},
-  {"int64",         MPI_INT64_T,        sizeof(int64_t)},
-  {"int",           MPI_INT,            sizeof(int)},
-  {"float",         MPI_FLOAT,          sizeof(float)},
-  {"double",        MPI_DOUBLE,         sizeof(double)},
-  {"char",          MPI_CHAR,           sizeof(char)},
-  {"unsigned_char", MPI_UNSIGNED_CHAR,  sizeof(unsigned char)}
-};
-
-
-int get_data_type(const char *type_string, MPI_Datatype *dtype, size_t *type_size) {
-  int num_types = sizeof(type_map) / sizeof(type_map[0]);
-
-  for(int i = 0; i < num_types; i++) {
-    if(strcmp(type_string, type_map[i].t_string) == 0) {
-      *dtype = type_map[i].mpi_type;
-      *type_size = type_map[i].t_size;
-      return 0;
-    }
-  }
-
-  fprintf(stderr, "Error: datatype %s not in `type_map`. Aborting...", type_string);
-  return -1;
-}
 
 
 int split_communicator(MPI_Comm *inter_comm, MPI_Comm *intra_comm){
@@ -799,6 +901,39 @@ int write_output_to_file(test_routine_t test_routine, double *highest, double *a
   }
 }
 
+
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+int write_instrument_output_to_file(test_routine_t test_routine, double* times,
+                                    double** tag_times, const char** tag_names, int iter){
+  FILE *output_file = fopen(test_routine.output_data_file, "w");
+  if(output_file == NULL) {
+    fprintf(stderr, "Error: Opening file %s for writing", test_routine.output_data_file);
+    return -1;
+  }
+
+  int num_tags = libpico_count_tags();
+
+  fprintf(output_file, "rank0");
+  for(int tag = 0; tag < num_tags; tag++) {
+    fprintf(output_file, ",%s", tag_names[tag]);
+  }
+  fprintf(output_file, "\n");
+
+  for (int i = 0; i < iter; i++) {
+    fprintf(output_file, "%" PRId64, (int64_t)(times[i] * 1e9));
+    for(int tag = 0; tag < num_tags; tag++) {
+      fprintf(output_file, ",%" PRId64, (int64_t)(tag_times[tag][i] * 1e9));
+    }
+    fprintf(output_file, "\n");
+  }
+
+  fclose (output_file);
+
+  return 0;
+}
+
+#endif
+
 int file_not_exists(const char* filename) {
   struct stat buffer;
   return (stat(filename, &buffer) != 0) ? 1 : 0;
@@ -916,8 +1051,6 @@ int rand_sbuf_generator(void *sbuf, MPI_Datatype dtype, size_t count,
       ((double *)sbuf)[i] = (double)rand_r(&seed) / (double) RAND_MAX * 100.0;
     } else if(dtype == MPI_CHAR) {
       ((char *)sbuf)[i] = (char)((rand_r(&seed) % 256) - 128);
-    } else if(dtype == MPI_UNSIGNED_CHAR) {
-      ((unsigned char *)sbuf)[i] = (unsigned char)(rand_r(&seed) % 256);
     } else {
       fprintf(stderr, "Error: sbuf not generated correctly. Aborting...");
       return -1;

@@ -473,50 +473,10 @@
           "internal"
         ]
       },
-      "bine_bdw_static_ompi": {
-        "desc": "Open MPI internal bine bandwidth optimal algorithm of `OMPI_bine`. Not to be used if `count`<`comm_sz`. Works only with power of 2 processes, less or equal to 256. This version utilizes static bitmaps reordered to be contigous. This algorithm is used for medium to large messages",
-        "library": {
-          "ompi_bine": "5.0.0"
-        },
-        "dynamic_rule": 13,
-        "constraints": [
-          {
-            "key": "count",
-            "conditions": [
-              {
-                "operator": ">=",
-                "value": "comm_sz"
-              }
-            ]
-          },
-          {
-            "key": "comm_sz",
-            "conditions": [
-              {
-                "operator": "is_power_of_two",
-                "value": true
-              },
-              {
-                "operator": "<=",
-                "value": 256
-              }
-            ]
-          }
-        ],
-        "tags": [
-          "bine_bdw_static",
-          "bine",
-          "bandwidth_optimal",
-          "static",
-          "medium_sizes",
-          "large_sizes",
-          "internal"
-        ]
-      },
       "recursive_doubling_over": {
-        "desc": "Libbine external recursive doubling algorithm. This algorithm is used for small to medium messages",
+        "desc": "libpico external recursive doubling algorithm. This algorithm is used for small to medium messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -528,9 +488,9 @@
         ]
       },
       "ring_over": {
-        "desc": "Libbine external ring algorithm. Not to be used if `count`<`comm_sz`. This algorithm is used for large messages",
+        "desc": "libpico external ring algorithm. Not to be used if `count`<`comm_sz`. This algorithm is used for large messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -552,9 +512,9 @@
         ]
       },
       "rabenseifner_over": {
-        "desc": "Libbine external Rabenseifner algorithm. Not to be used if `count`<`comm_sz` and for non commutative `op`. This algorithm is used for medium to large messages",
+        "desc": "libpico external Rabenseifner algorithm. Not to be used if `count`<`comm_sz` and for non commutative `op`. This algorithm is used for medium to large messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -578,9 +538,9 @@
         ]
       },
       "bine_lat_over": {
-        "desc": "Libbine external bine latency optimal algorithm. This algorithm is used for small to medium messages",
+        "desc": "libpico external bine latency optimal algorithm. This algorithm is used for small to medium messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -591,50 +551,10 @@
           "external"
         ]
       },
-      "bine_bdw_static_over": {
-        "desc": "Libbine external bine bandwidth optimal algorithm. Not to be used if `count`<`comm_sz`. Works only with power of 2 processes, less or equal to 256. This version utilizes static bitmaps reordered to be contigous. This algorithm is used for medium to large messages",
-        "library": {
-          "libbine": "1.0.0"
-        },
-        "cvar": "auto",
-        "dynamic_rule": 0,
-        "constraints": [
-          {
-            "key": "count",
-            "conditions": [
-              {
-                "operator": ">=",
-                "value": "comm_sz"
-              }
-            ]
-          },
-          {
-            "key": "comm_sz",
-            "conditions": [
-              {
-                "operator": "is_power_of_two",
-                "value": true
-              },
-              {
-                "operator": "<=",
-                "value": 256
-              }
-            ]
-          }
-        ],
-        "tags": [
-          "bine_bdw_static",
-          "bine",
-          "bandwidth_optimal",
-          "static",
-          "suboptimal",
-          "external"
-        ]
-      },
       "bine_bdw_remap_over": {
-        "desc": "Libbine external bine bandwidth optimal algorithm. Not to be used if `count`<`comm_sz`. Works only with power of 2 processes. This version remaps rank to allow the sending of contiguous buffers.",
+        "desc": "libpico external bine bandwidth optimal algorithm. Not to be used if `count`<`comm_sz`. Works only with power of 2 processes. This version remaps rank to allow the sending of contiguous buffers.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -667,9 +587,9 @@
         ]
       },
       "bine_block_by_block_any_even": {
-        "desc": "Libbine external bine bandwidth optimal algorithm. Not to be used if `count`<`comm_sz`. Works only with even processes. This version sends each data block/segment individually. It segments the message into segments of size `segsize  = count / comm_sz` ",
+        "desc": "libpico external bine bandwidth optimal algorithm. Not to be used if `count`<`comm_sz`. Works only with even processes. This version sends each data block/segment individually. It segments the message into segments of size `segsize  = count / comm_sz` ",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -702,9 +622,9 @@
         ]
       },
       "bine_bdw_remap_segmented_over": {
-        "desc": "Libbine external bine bandwidth optimal algorithm. Not to be used if `count`<`comm_sz`. This version remaps rank to allow the sending of contiguous buffers. It segments the message into segments of size `segsize  = count / comm_sz` ",
+        "desc": "libpico external bine bandwidth optimal algorithm. Not to be used if `count`<`comm_sz`. This version remaps rank to allow the sending of contiguous buffers. It segments the message into segments of size `segsize  = count / comm_sz` ",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1116,9 +1036,9 @@
         ]
       },
       "k_bruck_over": {
-        "desc": "Libbine external K-nomial Bruck algorithm. It requires an additional parameter `radix`. This algorithm is used for medium to large messages",
+        "desc": "libpico external K-nomial Bruck algorithm. It requires an additional parameter `radix`. This algorithm is used for medium to large messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -1148,9 +1068,9 @@
         ]
       },
       "recursive_doubling_over": {
-        "desc": "Libbine external recursive doubling algorithm. Works only on power of 2 processes. Comm_sz must be greater or equal to count.",
+        "desc": "libpico external recursive doubling algorithm. Works only on power of 2 processes. Comm_sz must be greater or equal to count.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1181,9 +1101,9 @@
         ]
       },
       "ring_over": {
-        "desc": "Libbine external ring algorithm. This algorithm is used for large messages. Comm_sz must be greater or equal to count.",
+        "desc": "libpico external ring algorithm. This algorithm is used for large messages. Comm_sz must be greater or equal to count.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1205,9 +1125,9 @@
         ]
       },
       "sparbit_over": {
-        "desc": "Libbine external sparse bit algorithm. Comm_sz must be greater or equal to count.",
+        "desc": "libpico external sparse bit algorithm. Comm_sz must be greater or equal to count.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1228,9 +1148,9 @@
         ]
       },
       "bine_block_by_block_over": {
-        "desc": "Libbine external bine block by block algorithm. Works only for power of 2 processes",
+        "desc": "libpico external bine block by block algorithm. Works only for power of 2 processes",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1262,9 +1182,9 @@
         ]
       },
       "bine_block_by_block_over_any_even": {
-        "desc": "Libbine external bine block by block algorithm. Works for any number of even processes",
+        "desc": "libpico external bine block by block algorithm. Works for any number of even processes",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1295,127 +1215,10 @@
           "external"
         ]
       },
-      "bine_permute_static_over": {
-        "desc": "Libbine external bine static algorithm. Works only for power of 2 processes, less or equal to 256. Comm_sz must be greater or equal to count. This version uses a memcpy at the end of the send/recv operation to order the buffer for the remapping of the ranks (send contiguous buffers).",
-        "library": {
-          "libbine": "1.0.0"
-        },
-        "cvar": "auto",
-        "dynamic_rule": 0,
-        "constraints": [
-          {
-            "key": "count",
-            "conditions": [
-              {
-                "operator": ">=",
-                "value": "comm_sz"
-              }
-            ]
-          },
-          {
-            "key": "comm_sz",
-            "conditions": [
-              {
-                "operator": "is_power_of_two",
-                "value": true
-              },
-              {
-                "operator": "<=",
-                "value": 256
-              }
-            ]
-          }
-        ],
-        "tags": [
-          "bine_static",
-          "bine",
-          "permute",
-          "static",
-          "suboptimal",
-          "external"
-        ]
-      },
-      "bine_send_static_over": {
-        "desc": "Libbine external bine static algorithm. Works only for power of 2 processes, less or equal to 256. Comm_sz must be greater or equal to count. This version uses an additional send to the first step to order the buffer for the remapping of the ranks (send contiguous buffers).",
-        "library": {
-          "libbine": "1.0.0"
-        },
-        "cvar": "auto",
-        "dynamic_rule": 0,
-        "constraints": [
-          {
-            "key": "count",
-            "conditions": [
-              {
-                "operator": ">=",
-                "value": "comm_sz"
-              }
-            ]
-          },
-          {
-            "key": "comm_sz",
-            "conditions": [
-              {
-                "operator": "is_power_of_two",
-                "value": true
-              },
-              {
-                "operator": "<=",
-                "value": 256
-              }
-            ]
-          }
-        ],
-        "tags": [
-          "bine_static",
-          "bine",
-          "static",
-          "suboptimal",
-          "external"
-        ]
-      },
-      "bine_permute_remap_over": {
-        "desc": "Libbine external bine remap algorithm. Works only for power of 2 processes less or equal to 256. This version remaps rank to allow the sending of contiguous buffers. Count must be greater or equal to comm_sz.",
-        "library": {
-          "libbine": "1.0.0"
-        },
-        "cvar": "auto",
-        "dynamic_rule": 0,
-        "constraints": [
-          {
-            "key": "comm_sz",
-            "conditions": [
-              {
-                "operator": "is_power_of_two",
-                "value": true
-              },
-              {
-                "operator": "<=",
-                "value": 256
-              }
-            ]
-          },
-          {
-            "key": "count",
-            "conditions": [
-              {
-                "operator": ">=",
-                "value": "comm_sz"
-              }
-            ]
-          }
-        ],
-        "tags": [
-          "bine_remap",
-          "permute",
-          "bine",
-          "external"
-        ]
-      },
       "bine_send_remap_over": {
-        "desc": "Libbine external bine remap algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. This version remaps rank to allow the sending of contiguous buffers.",
+        "desc": "libpico external bine remap algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. This version remaps rank to allow the sending of contiguous buffers.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1446,9 +1249,9 @@
         ]
       },
       "bine_2_blocks_over": {
-        "desc": "Libbine external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with one possible additional communication.",
+        "desc": "libpico external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with one possible additional communication.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1479,9 +1282,9 @@
         ]
       },
       "bine_2_blocks_dtype_over": {
-        "desc": "Libbine external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with derived datatypes.",
+        "desc": "libpico external bine algorithm. Works only for power of 2 processes. Count must be greater or equal to comm_sz. It utilizes a recoursive distance doubling communication pattern (the other bine allgather instead use a recursive distance halving) and handles sparse data with derived datatypes.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "cvar": "auto",
         "dynamic_rule": 0,
@@ -1841,9 +1644,9 @@
         ]
       },
       "bine_over": {
-        "desc": "Libbine external alltoall algorithm. This algorithm is used for small to medium messages",
+        "desc": "libpico external alltoall algorithm. This algorithm is used for small to medium messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -1869,6 +1672,38 @@
         "dynamic_rule": 0,
         "tags": [
           "bine",
+          "external"
+        ]
+      },
+      "pairwise_ompi_over": {
+        "desc": "libpico pairwise algorithm, copied from Open MPI.",
+        "library": {
+          "libpico": "1.0.0"
+        },
+        "constraints": [
+          {
+            "key": "count",
+            "conditions": [
+              {
+                "operator": ">=",
+                "value": "comm_sz"
+              }
+            ]
+          },
+          {
+            "key": "comm_sz",
+            "conditions": [
+              {
+                "operator": "is_power_of_two",
+                "value": true
+              }
+            ]
+          }
+        ],
+        "cvar": "auto",
+        "dynamic_rule": 0,
+        "tags": [
+          "pairwise",
           "external"
         ]
       }
@@ -2205,9 +2040,9 @@
         ]
       },
       "scatter_allgather_over": {
-        "desc": "Libbine external scatter allgather algorithm. It consists of a binomial tree scatter followed by a recursive doubling allgather. It requires `count` to be greater than `comm_sz`.",
+        "desc": "libpico external scatter allgather algorithm. It consists of a binomial tree scatter followed by a recursive doubling allgather. It requires `count` to be greater than `comm_sz`.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -2229,9 +2064,9 @@
         ]
       },
       "bine_lat_over": {
-        "desc": "Libbine external bine latency optimal algorithm. This algorithm uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
+        "desc": "libpico external bine latency optimal algorithm. This algorithm uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -2263,9 +2098,9 @@
         ]
       },
       "bine_lat_reversed_over": {
-        "desc": "Libbine external bine latency optimal algorithm with reversed peer selection. This algorithm uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
+        "desc": "libpico external bine latency optimal algorithm with reversed peer selection. This algorithm uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -2297,9 +2132,9 @@
         ]
       },
       "bine_lat_new_over": {
-        "desc": "New libbine external bine latency optimal algorithm.",
+        "desc": "New libpico external bine latency optimal algorithm.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -2322,9 +2157,9 @@
         ]
       },
       "bine_lat_i_new_over": {
-        "desc": "New libbine external bine latency optimal algorithm with isend.",
+        "desc": "New libpico external bine latency optimal algorithm with isend.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -2346,59 +2181,10 @@
           "external"
         ]
       },
-      "bine_bdw_static_over": {
-        "desc": "Libbine external bine bandwidth optimal algorithm with static bitmaps. This algorithm is a combination of a bine scatter and a bine allgather and utilizes static bitmaps. It does not utilizes standard collectives written elsewere since for the allgather phase it calculates which rank needs to send and which don't to avoid wasteful communications. It works only if `comm` is a power of 2 less or equal to 256 and root is 0. Also count must be greater than comm_sz.",
-        "library": {
-          "libbine": "1.0.0"
-        },
-        "constraints": [
-          {
-            "key": "comm_sz",
-            "conditions": [
-              {
-                "operator": "is_power_of_two",
-                "value": true
-              },
-              {
-                "operator": "<=",
-                "value": 256
-              }
-            ]
-          },
-          {
-            "key": "root",
-            "conditions": [
-              {
-                "operator": "==",
-                "value": 0
-              }
-            ]
-          },
-          {
-            "key": "count",
-            "conditions": [
-              {
-                "operator": ">=",
-                "value": "comm_sz"
-              }
-            ]
-          }
-        ],
-        "cvar": "auto",
-        "dynamic_rule": 0,
-        "tags": [
-          "bine_bdw_static",
-          "bine",
-          "bandwidth_optimal",
-          "suboptimal",
-          "static",
-          "external"
-        ]
-      },
       "bine_bdw_remap_over": {
-        "desc": "Libbine external bine bandwidth optimal algorithm. This algorithm is a combination of a bine scatter and a bine allgather.",
+        "desc": "libpico external bine bandwidth optimal algorithm. This algorithm is a combination of a bine scatter and a bine allgather.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -2604,9 +2390,9 @@
         ]
       },
       "bine_over": {
-        "desc": "Libbine external bine algorithm. It uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
+        "desc": "libpico external bine algorithm. It uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -2815,9 +2601,9 @@
         ]
       },
       "bine_lat_over": {
-        "desc": "Libbine external bine latency optimal algorithm.",
+        "desc": "libpico external bine latency optimal algorithm.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -2849,9 +2635,9 @@
         ]
       },
       "bine_bdw_over": {
-        "desc": "Libbine external bine bandwidth optimal algorithm.",
+        "desc": "libpico external bine bandwidth optimal algorithm.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3163,9 +2949,9 @@
         ]
       },
       "recursive_distance_doubling_over": {
-        "desc": "Libbine external recursive distance doubling algorithm. It works only with power of 2 processes",
+        "desc": "libpico external recursive distance doubling algorithm. It works only with power of 2 processes",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3195,9 +2981,9 @@
         ]
       },
       "recursive_halving_over": {
-        "desc": "Libbine external recursive halving algorithm. Similar to `basic`'s reduce scatter. Works only for commutative `op`. This algorithm is used for small to medium messages",
+        "desc": "libpico external recursive halving algorithm. Similar to `basic`'s reduce scatter. Works only for commutative `op`. This algorithm is used for small to medium messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3220,9 +3006,9 @@
         ]
       },
       "ring_over": {
-        "desc": "Libbine external ring algorithm. Works only on commutative `op`. This algorithm is used for large messages",
+        "desc": "libpico external ring algorithm. Works only on commutative `op`. This algorithm is used for large messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3244,9 +3030,9 @@
         ]
       },
       "butterfly_over": {
-        "desc": "Libbine external butterfly algorithm. This algorithm is used for small messages",
+        "desc": "libpico external butterfly algorithm. This algorithm is used for small messages",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3268,50 +3054,10 @@
           "external"
         ]
       },
-      "bine_static_over": {
-        "desc": "Libbine external bine static algorithm. Works only with power of 2 processes, less or equal to 256. This version utilizes static bitmaps reordered to be contigous. This algorithm is used for medium to large messages",
-        "library": {
-          "libbine": "1.0.0"
-        },
-        "constraints": [
-          {
-            "key": "count",
-            "conditions": [
-              {
-                "operator": ">=",
-                "value": "comm_sz"
-              }
-            ]
-          },
-          {
-            "key": "comm_sz",
-            "conditions": [
-              {
-                "operator": "is_power_of_two",
-                "value": true
-              },
-              {
-                "operator": "<=",
-                "value": 256
-              }
-            ]
-          }
-        ],
-        "cvar": "auto",
-        "dynamic_rule": 0,
-        "tags": [
-          "bine",
-          "static",
-          "suboptimal",
-          "medium_sizes",
-          "large_sizes",
-          "external"
-        ]
-      },
       "bine_send_remap_over": {
-        "desc": "Libbine external bine remap send algorithm. Works only with power of 2 processes.",
+        "desc": "libpico external bine remap send algorithm. Works only with power of 2 processes.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3343,9 +3089,9 @@
         ]
       },
       "bine_permute_remap_over": {
-        "desc": "Libbine external bine remap memcpy algorithm. Works only with power of 2 processes.",
+        "desc": "libpico external bine remap memcpy algorithm. Works only with power of 2 processes.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3377,9 +3123,9 @@
         ]
       },
       "bine_block_by_block_over": {
-        "desc": "Libbine external bine block by block algorithm. Works only for power of 2 processes",
+        "desc": "libpico external bine block by block algorithm. Works only for power of 2 processes",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3410,9 +3156,9 @@
         ]
       },
       "bine_block_by_block_any_even": {
-        "desc": "Libbine external bine block by block algorithm. Works only any even processes",
+        "desc": "libpico external bine block by block algorithm. Works only any even processes",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {
@@ -3607,9 +3353,9 @@
         ]
       },
       "bine_over": {
-        "desc": "Libbine external bine algorithm.",
+        "desc": "libpico external bine algorithm.",
         "library": {
-          "libbine": "1.0.0"
+          "libpico": "1.0.0"
         },
         "constraints": [
           {

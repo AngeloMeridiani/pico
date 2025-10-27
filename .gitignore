@@ -5,7 +5,13 @@ compile_commands.json
 bin/
 obj/
 lib/
+schedgen/traces/hpc/
+schedgen/cmdline.c
+schedgen/cmdline.h
+schedgen/schedgen
 plot/*/*
+!plot/plots/*.py
+!plot/scripts/*.sh
 *.err
 *.o
 *.out
@@ -20,3 +26,4 @@ tracer/*.pdf
 tracer/sinfo_summary.csv
 tracer/sinfo/*.pdf
 **/__pycache__/
+ai_traces/

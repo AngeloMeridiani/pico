@@ -8,11 +8,15 @@
 
 #include <mpi.h>
 #include <stdio.h>
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
 #include <cuda_runtime.h>
 #endif
+#ifdef PICO_NCCL
+#include <nccl.h>
+#endif
 
-#include "libbine.h"
+#include "pico_mpi_nccl_mapper.h"
+#include "libpico.h"
 
 #if defined(__GNUC__) || defined(__clang__)
   #define PICO_CORE_UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -24,7 +28,7 @@
 #ifndef DEBUG
   #define PICO_CORE_DEBUG_PRINT_STR(name)
   #define PICO_CORE_DEBUG_PRINT_BUFFERS(result, expected, count, dtype, comm, use_barrier) do {} while(0)
-#else
+#elif !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE  // Trying this with gpu buffer would need memcpy back to host
   #define PICO_CORE_DEBUG_PRINT_STR(name)           \
     do{                                         \
       int my_r;                                 \
@@ -114,36 +118,47 @@ int scatter_allocator(ALLOCATOR_ARGS);
 //                               FUNCTION POINTER AND WRAPPER
 //                       (for specific collective function and gt_check)
 //-----------------------------------------------------------------------------------------------
-typedef int (*allreduce_func_ptr)(ALLREDUCE_ARGS);
-typedef int (*allgather_func_ptr)(ALLGATHER_ARGS);
-typedef int (*alltoall_func_ptr)(ALLTOALL_ARGS);
-typedef int (*bcast_func_ptr)(BCAST_ARGS);
-typedef int (*gather_func_ptr)(GATHER_ARGS);
-typedef int (*reduce_func_ptr)(REDUCE_ARGS);
-typedef int (*reduce_scatter_func_ptr)(REDUCE_SCATTER_ARGS);
-typedef int (*scatter_func_ptr)(SCATTER_ARGS);
+#ifndef PICO_NCCL
+typedef int (*allreduce_func_ptr)(ALLREDUCE_MPI_ARGS);
+typedef int (*allgather_func_ptr)(ALLGATHER_MPI_ARGS);
+typedef int (*alltoall_func_ptr)(ALLTOALL_MPI_ARGS);
+typedef int (*bcast_func_ptr)(BCAST_MPI_ARGS);
+typedef int (*gather_func_ptr)(GATHER_MPI_ARGS);
+typedef int (*reduce_func_ptr)(REDUCE_MPI_ARGS);
+typedef int (*reduce_scatter_func_ptr)(REDUCE_SCATTER_MPI_ARGS);
+typedef int (*scatter_func_ptr)(SCATTER_MPI_ARGS);
 
-static inline int allreduce_wrapper(ALLREDUCE_ARGS){
+static inline int allreduce_wrapper(ALLREDUCE_MPI_ARGS){
   return MPI_Allreduce(sbuf, rbuf, (int)count, dtype, op, comm);
 }
-static inline int allgather_wrapper(ALLGATHER_ARGS){
+static inline int allgather_wrapper(ALLGATHER_MPI_ARGS){
   return MPI_Allgather(sbuf, (int)scount, sdtype, rbuf, (int)rcount, rdtype, comm);
 }
-static inline int alltoall_wrapper(ALLTOALL_ARGS){
+static inline int alltoall_wrapper(ALLTOALL_MPI_ARGS){
   return MPI_Alltoall(sbuf, (int)scount, sdtype, rbuf, (int)rcount, rdtype, comm);
 }
-static inline int bcast_wrapper(BCAST_ARGS){
+static inline int bcast_wrapper(BCAST_MPI_ARGS){
   return MPI_Bcast(buf, (int)count, dtype, root, comm);
 }
-static inline int gather_wrapper(GATHER_ARGS){
+static inline int gather_wrapper(GATHER_MPI_ARGS){
   return MPI_Gather(sbuf, (int)scount, sdtype, rbuf, (int)rcount, rdtype, root, comm);
 }
-static inline int reduce_wrapper(REDUCE_ARGS){
+static inline int reduce_wrapper(REDUCE_MPI_ARGS){
   return MPI_Reduce(sbuf, rbuf, (int)count, dtype, op, root, comm);
 }
-static inline int scatter_wrapper(SCATTER_ARGS){
+static inline int scatter_wrapper(SCATTER_MPI_ARGS){
   return MPI_Scatter(sbuf, (int)scount, sdtype, rbuf, (int)rcount, rdtype, root, comm);
 }
+#else
+typedef ncclResult_t (*allreduce_func_ptr)(ALLREDUCE_NCCL_ARGS);
+typedef ncclResult_t (*allgather_func_ptr)(ALLGATHER_NCCL_ARGS);
+typedef ncclResult_t (*alltoall_func_ptr)(ALLTOALL_NCCL_ARGS);
+typedef ncclResult_t (*bcast_func_ptr)(BCAST_NCCL_ARGS);
+typedef ncclResult_t (*gather_func_ptr)(GATHER_NCCL_ARGS);
+typedef ncclResult_t (*reduce_func_ptr)(REDUCE_NCCL_ARGS);
+typedef ncclResult_t (*reduce_scatter_func_ptr)(REDUCE_SCATTER_NCCL_ARGS);
+typedef ncclResult_t (*scatter_func_ptr)(SCATTER_NCCL_ARGS);
+#endif
 
 
 //-----------------------------------------------------------------------------------------------
@@ -164,9 +179,9 @@ static inline int scatter_wrapper(SCATTER_ARGS){
 typedef struct {
   coll_t collective; /**< Specifies the type of collective operation. */
   allocator_func_ptr allocator; /**< Pointer to the memory allocator function. */
-#ifdef CUDA_AWARE
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
   allocator_func_ptr allocator_cuda; /**< Pointer to the CUDA memory allocator function. */
-#endif // CUDA_AWARE
+#endif // PICO_MPI_CUDA_AWARE || PICO_NCCL
   size_t segsize; /**< Size of the segment for segmented collectives. */
 
   /** Union of function pointers for custom collective functions. */
@@ -191,16 +206,7 @@ typedef struct {
 //                                CUDA FUNCTIONS
 // ----------------------------------------------------------------------------------------------
 
-#ifdef CUDA_AWARE
-
-#define PICO_CORE_CUDA_CHECK(cmd, err) do {                 \
-  err = cmd;                                            \
-  if( err != cudaSuccess ) {                            \
-    fprintf(stderr, "Failed: Cuda error %s:%d '%s'\n",  \
-        __FILE__, __LINE__, cudaGetErrorString(err));   \
-    return -1;                                          \
-  }                                                     \
-} while(0)
+#if defined PICO_MPI_CUDA_AWARE || defined PICO_NCCL
 
 int allreduce_allocator_cuda(ALLOCATOR_ARGS);
 int allgather_allocator_cuda(ALLOCATOR_ARGS);
@@ -211,17 +217,44 @@ int reduce_allocator_cuda(ALLOCATOR_ARGS);
 int reduce_scatter_allocator_cuda(ALLOCATOR_ARGS);
 int scatter_allocator_cuda(ALLOCATOR_ARGS);
 
-int coll_memcpy_host_to_device(void** d_buf, void** buf, size_t count, size_t type_size, coll_t coll) {
-int coll_memcpy_device_to_host(void** d_buf, void** buf, size_t count, size_t type_size, coll_t coll) {
+int coll_memcpy_host_to_device(void** d_buf, void** buf, size_t count, size_t type_size, coll_t coll);
+int coll_memcpy_device_to_host(void** d_buf, void** buf, size_t count, size_t type_size, coll_t coll);
 
 #endif
 
+//-----------------------------------------------------------------------------------------------
+//                                TAG INITIALIZATION HELPER
+//-----------------------------------------------------------------------------------------------
+
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+
+/**
+ * @brief Run the selected operation once. Used for tag initialization.
+ *
+ * @return MPI_SUCCESS on success, an MPI_ERR code on error.
+ */
+int run_coll_once(test_routine_t test_routine, void *sbuf, void *rbuf,
+                   size_t count, MPI_Datatype dtype, MPI_Comm comm);
+
+#define PICO_INSTRUMENTATION_CALLS do {                                 \
+  if (libpico_snapshot_store(i) != 0) {                                 \
+    fprintf(stderr, "Error: Failed to store snapshot. Aborting...\n");  \
+    return -1;                                                          \
+  } if (libpico_clear_tags() != 0) {                                    \
+    fprintf(stderr, "Error: Failed to clear tags. Aborting...\n");      \
+    return -1;                                                          \
+  }                                                                     \
+} while(0)
+#else
+#define PICO_INSTRUMENTATION_CALLS
+#endif
 
 //-----------------------------------------------------------------------------------------------
 //                                MAIN PICO_COREMARK LOOP FUNCTIONS
 //-----------------------------------------------------------------------------------------------
 
 
+#ifndef PICO_NCCL
  /**
  * @brief Test loop interface that select the appropriate collective operation
  * test loop based on the collective type and algorithm specified in the test_routine.
@@ -232,42 +265,108 @@ int test_loop(test_routine_t test_routine, void *sbuf, void *rbuf, size_t count,
               MPI_Datatype dtype, MPI_Comm comm, int iter, double *times);
 
 /**
- * @macro TEST_LOOP
- * @brief Macro to generate a test loop for a given collective operation.
+ * @macro DEFINE_TEST_LOOP
+ * @brief Macro to generate the MPI test loop for a given collective operation.
  *
  * @param OP_NAME Name of the operation.
  * @param ARGS Arguments for the operation.
  * @param COLLECTIVE Collective operation to perform.
  */
-#define DEFINE_TEST_LOOP(OP_NAME, ARGS, COLLECTIVE)                  \
-static inline int OP_NAME##_test_loop(ARGS, int iter, double *times, \
-                                   test_routine_t test_routine) {    \
-  int ret = MPI_SUCCESS;                                             \
-  double start_time, end_time;                                       \
-  MPI_Barrier(comm);                                                 \
-  for(int i = 0; i < iter; i++) {                                    \
-    start_time = MPI_Wtime();                                        \
-    ret = test_routine.function.COLLECTIVE;                          \
-    end_time = MPI_Wtime();                                          \
-    times[i] = end_time - start_time;                                \
-    if(PICO_CORE_UNLIKELY(ret != MPI_SUCCESS)) {                         \
-      fprintf(stderr, "Error: " #OP_NAME " failed. Aborting...");    \
-      return ret;                                                    \
-    }                                                                \
-    MPI_Barrier(comm);                                               \
-  }                                                                  \
-  return ret;                                                        \
+#define DEFINE_TEST_LOOP(OP_NAME, ARGS, COLLECTIVE)                   \
+static inline int OP_NAME##_test_loop(ARGS, int iter, double *times,  \
+                                   test_routine_t test_routine) {         \
+  int ret = MPI_SUCCESS;                                                  \
+  double start_time, end_time;                                            \
+  MPI_Barrier(comm);                                                      \
+  for(int i = 0; i < iter; i++) {                                         \
+    start_time = MPI_Wtime();                                             \
+    ret = test_routine.function.COLLECTIVE;                               \
+    end_time = MPI_Wtime();                                               \
+    times[i] = end_time - start_time;                                     \
+    if(PICO_CORE_UNLIKELY(ret != MPI_SUCCESS)) {                          \
+      char error_string[MPI_MAX_ERROR_STRING];                            \
+      int result_len;                                                     \
+      MPI_Error_string(ret, error_string, &result_len);                   \
+      fprintf(stderr, "Error: " #OP_NAME " failed: %s", error_string);    \
+      return ret;                                                         \
+    }                                                                     \
+    PICO_INSTRUMENTATION_CALLS;                                           \
+    MPI_Barrier(comm);                                                    \
+  }                                                                       \
+  return ret;                                                             \
 }
 
-DEFINE_TEST_LOOP(allreduce, ALLREDUCE_ARGS, allreduce(sbuf, rbuf, count, dtype, MPI_SUM, comm))
-DEFINE_TEST_LOOP(allgather, ALLGATHER_ARGS, allgather(sbuf, scount, sdtype, rbuf, rcount, rdtype, comm))
-DEFINE_TEST_LOOP(alltoall, ALLTOALL_ARGS, alltoall(sbuf, scount, sdtype, rbuf, rcount, rdtype, comm))
-DEFINE_TEST_LOOP(bcast, BCAST_ARGS, bcast(buf, count, dtype, 0, comm))
-DEFINE_TEST_LOOP(gather, GATHER_ARGS, gather(sbuf, scount, sdtype, rbuf, rcount, rdtype, 0, comm))
-DEFINE_TEST_LOOP(reduce, REDUCE_ARGS, reduce(sbuf, rbuf, count, dtype, MPI_SUM, 0, comm))
-DEFINE_TEST_LOOP(reduce_scatter, REDUCE_SCATTER_ARGS, reduce_scatter(sbuf, rbuf, rcounts, dtype, MPI_SUM, comm))
-DEFINE_TEST_LOOP(scatter, SCATTER_ARGS, scatter(sbuf, scount, sdtype, rbuf, rcount, rdtype, 0, comm))
+DEFINE_TEST_LOOP(allreduce, ALLREDUCE_MPI_ARGS, allreduce(sbuf, rbuf, count, dtype, MPI_SUM, comm))
+DEFINE_TEST_LOOP(allgather, ALLGATHER_MPI_ARGS, allgather(sbuf, scount, sdtype, rbuf, rcount, rdtype, comm))
+DEFINE_TEST_LOOP(alltoall, ALLTOALL_MPI_ARGS, alltoall(sbuf, scount, sdtype, rbuf, rcount, rdtype, comm))
+DEFINE_TEST_LOOP(bcast, BCAST_MPI_ARGS, bcast(buf, count, dtype, 0, comm))
+DEFINE_TEST_LOOP(gather, GATHER_MPI_ARGS, gather(sbuf, scount, sdtype, rbuf, rcount, rdtype, 0, comm))
+DEFINE_TEST_LOOP(reduce, REDUCE_MPI_ARGS, reduce(sbuf, rbuf, count, dtype, MPI_SUM, 0, comm))
+DEFINE_TEST_LOOP(reduce_scatter, REDUCE_SCATTER_MPI_ARGS, reduce_scatter(sbuf, rbuf, rcounts, dtype, MPI_SUM, comm))
+DEFINE_TEST_LOOP(scatter, SCATTER_MPI_ARGS, scatter(sbuf, scount, sdtype, rbuf, rcount, rdtype, 0, comm))
 
+#else
+
+ /**
+ * @brief Test loop interface that select the appropriate collective operation
+ * test loop based on the collective type and algorithm specified in the test_routine.
+ *
+ * @return 0 on success, -1 on error.
+ */
+int test_loop(test_routine_t test_routine, void *sbuf, void *rbuf, size_t count,
+              ncclDataType_t dtype, ncclComm_t nccl_comm, cudaStream_t stream, int iter, double *times);
+
+/**
+ * @macro DEFINE_TEST_LOOP
+ * @brief Macro to generate the NCCL test loop for a given collective operation.
+ *
+ * @param OP_NAME Name of the operation.
+ * @param ARGS Arguments for the operation.
+ * @param COLLECTIVE Collective operation to perform.
+ */
+#define DEFINE_TEST_LOOP(OP_NAME, ARGS, COLLECTIVE)                         \
+static inline int OP_NAME##_test_loop(ARGS, int iter, double *times,        \
+                                      test_routine_t test_routine) {        \
+  ncclResult_t ret = ncclSuccess;                                           \
+  cudaError_t  cerr;                                                        \
+  cudaEvent_t  ev0, ev1;                                                    \
+  PICO_CORE_CUDA_CHECK(cudaEventCreate(&ev0), cerr);                        \
+  PICO_CORE_CUDA_CHECK(cudaEventCreate(&ev1), cerr);                        \
+                                                                            \
+  PICO_CORE_CUDA_CHECK(cudaStreamSynchronize(stream), cerr);                \
+  MPI_Barrier(MPI_COMM_WORLD);                                              \
+  for (int i = 0; i < iter; i++) {                                          \
+    PICO_CORE_CUDA_CHECK(cudaEventRecord(ev0, stream), cerr);               \
+    ret = test_routine.function.COLLECTIVE;                                 \
+    if (PICO_CORE_UNLIKELY(ret != ncclSuccess)) {                           \
+      fprintf(stderr, "Error: " #OP_NAME " failed (NCCL): %s\n",            \
+              ncclGetErrorString(ret));                                     \
+      PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev0), cerr);                    \
+      PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev1), cerr);                    \
+      return -1;                                                            \
+    }                                                                       \
+    PICO_CORE_CUDA_CHECK(cudaEventRecord(ev1, stream), cerr);               \
+    PICO_CORE_CUDA_CHECK(cudaEventSynchronize(ev1), cerr);                  \
+    float ms = 0.0f;                                                        \
+    PICO_CORE_CUDA_CHECK(cudaEventElapsedTime(&ms, ev0, ev1), cerr);        \
+    times[i] = ms * 1e-3;                                                   \
+    MPI_Barrier(MPI_COMM_WORLD);                                            \
+  }                                                                         \
+  PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev0), cerr);                        \
+  PICO_CORE_CUDA_CHECK(cudaEventDestroy(ev1), cerr);                        \
+  return 0;                                                                 \
+}
+
+DEFINE_TEST_LOOP(allreduce, ALLREDUCE_NCCL_ARGS, allreduce(sbuf, rbuf, count, dtype, ncclSum, nccl_comm, stream))
+DEFINE_TEST_LOOP(allgather, ALLGATHER_NCCL_ARGS, allgather(sbuf, rbuf, count, dtype, nccl_comm, stream))
+DEFINE_TEST_LOOP(alltoall, ALLTOALL_NCCL_ARGS, alltoall(sbuf, rbuf, count, dtype, nccl_comm, stream))
+DEFINE_TEST_LOOP(bcast, BCAST_NCCL_ARGS, bcast(buf, count, dtype, 0, nccl_comm, stream))
+DEFINE_TEST_LOOP(gather, GATHER_NCCL_ARGS, gather(sbuf, rbuf, count, dtype, 0, nccl_comm, stream))
+DEFINE_TEST_LOOP(reduce, REDUCE_NCCL_ARGS, reduce(sbuf, rbuf, count, dtype, ncclSum, 0, nccl_comm, stream))
+DEFINE_TEST_LOOP(reduce_scatter, REDUCE_SCATTER_NCCL_ARGS, reduce_scatter(sbuf, rbuf, rcount, dtype, ncclSum, nccl_comm, stream))
+DEFINE_TEST_LOOP(scatter, SCATTER_NCCL_ARGS, scatter(sbuf, rbuf, count, dtype, 0, nccl_comm, stream))
+
+#endif
 
 //-----------------------------------------------------------------------------------------------
 //                                   GROUND TRUTH CHECK FUNCTIONS
@@ -279,12 +378,12 @@ DEFINE_TEST_LOOP(scatter, SCATTER_ARGS, scatter(sbuf, scount, sdtype, rbuf, rcou
  * @param buf_1 First buffer.
  * @param buf_2 Second buffer.
  * @param count Size of the buffers in number of elements.
- * @param dtype MPI_Datatype of the recvbuf.
+ * @param dtype PICO_DTYPE_T of the recvbuf.
  * @param comm Communicator.
  * @return 0 if buffers are equal within tolerance, -1 otherwise.
  */
 int are_equal_eps(const void *buf_1, const void *buf_2, size_t count,
-                  MPI_Datatype dtype, MPI_Comm comm);
+                  PICO_DTYPE_T dtype, MPI_Comm comm);
 
 
 /**
@@ -297,10 +396,10 @@ int are_equal_eps(const void *buf_1, const void *buf_2, size_t count,
  */
 #define GT_CHECK_BUFFER(result, expected, count, dtype, comm)                 \
   do {                                                                        \
-    if(dtype != MPI_DOUBLE && dtype != MPI_FLOAT) {                          \
-      if(memcmp((result), (expected), (count) * type_size) != 0) {           \
+    if(dtype != MPI_DOUBLE && dtype != MPI_FLOAT) {                           \
+      if(memcmp((result), (expected), (count) * type_size) != 0) {            \
         PICO_CORE_DEBUG_PRINT_BUFFERS((result), (expected), (count), (dtype), (comm), (1));  \
-        fprintf(stderr, "Error: results are not valid. Aborting...");       \
+        fprintf(stderr, "Error: results are not valid. Aborting...");         \
         ret = -1;                                                             \
       }                                                                       \
     } else {                                                                  \
@@ -321,7 +420,7 @@ int are_equal_eps(const void *buf_1, const void *buf_2, size_t count,
  * @return 0 on success, an -1 on error.
  */
 int ground_truth_check(test_routine_t test_routine, void *sbuf, void *rbuf, void *rbuf_gt,
-                       size_t count, MPI_Datatype dtype, MPI_Comm comm);
+                       size_t count, PICO_DTYPE_T dtype, MPI_Comm comm);
 
 
 //-----------------------------------------------------------------------------------------------
@@ -375,16 +474,6 @@ int get_command_line_arguments(int argc, char** argv, size_t *array_count,
 int get_data_saving_options(test_routine_t *test_routine, size_t count,
                             const char *algorithm, const char *type_string);
 
-/**
- * @brief Retrieves the MPI datatype and size based on a string identifier utilizing `type_map`.
- *
- * @param type_string String representation of the data type.
- * @param[out] dtype MPI datatype corresponding to the string.
- * @param[out] type_size Size of the datatype in bytes.
- * @return 0 on success, -1 if the data type is invalid.
- */
-int get_data_type(const char *type_string, MPI_Datatype *dtype, size_t *type_size);
-
 
 /**
  * @brief Splits the MPI communicator into inter and intra communicators.
@@ -406,6 +495,34 @@ int split_communicator(MPI_Comm *inter_comm, MPI_Comm *intra_comm);
 //-----------------------------------------------------------------------------------------------
 //                                  I/O FUNCTIONS
 //-----------------------------------------------------------------------------------------------
+
+#if defined PICO_INSTRUMENT && !defined PICO_NCCL && !defined PICO_MPI_CUDA_AWARE
+
+static inline int pico_name_col_width(const char **names, int n, int min_w, int max_w) {
+    int w = min_w;
+    for (int i = 0; i < n; ++i) {
+        int len = (int)strlen(names[i]);
+        if (len > w) w = len;
+    }
+    if (w > max_w) w = max_w;
+    return w;
+}
+
+/**
+ * @brief Writes the instrumentation timing results to a specified output file in CSV format.
+ *
+ * @param test_routine The test routine structure containing the output file path.
+ * @param times An array containing the timing values for each iteration.
+ * @param tag_times A 2D array containing the timing values for each tag across all iterations.
+ * @param tag_names An array of strings containing the names of the tags.
+ * @param iter The number of iterations.
+ *
+ * @return int Returns 0 on success, or -1 if an error occurs.
+ *
+ * @note Time is saved in ns (i.e. 10^-9 s).
+ */
+int write_instrument_output_to_file(test_routine_t test_routine, double* times, double** tag_times, const char** tag_names, int iter);
+#endif
 
 /**
  * @brief Writes the timing results to a specified output file in CSV format.
@@ -476,7 +593,7 @@ int write_allocations_to_file(const char* filename, MPI_Comm comm);
  *
  * @return 0 on success, -1 if the data type is unsupported.
  */
-int rand_sbuf_generator(void *sbuf, MPI_Datatype dtype, size_t array_size,
+int rand_sbuf_generator(void *sbuf, PICO_DTYPE_T dtype, size_t array_size,
                          MPI_Comm comm, test_routine_t test_routine);
 
 
@@ -501,7 +618,7 @@ int concatenate_path(const char *dirpath, const char *filename, char *fullpath);
  * @param use_barrier Flag to indicate if a barrier should be used.
  */
 void print_buffers(const void *sbuf, const void *rbuf, const void *rbuf_gt,
-                   size_t sbuf_count, size_t rbuf_count, MPI_Datatype dtype,
+                   size_t sbuf_count, size_t rbuf_count, PICO_DTYPE_T dtype,
                    MPI_Comm comm, int use_barrier);
 
 //-----------------------------------------------------------------------------------------------
@@ -519,7 +636,7 @@ void print_buffers(const void *sbuf, const void *rbuf, const void *rbuf_gt,
  *
  * @return 0 on success, -1 if the data type is unsupported.
  */
-int debug_sbuf_generator(void *sbuf, MPI_Datatype dtype, size_t count,
+int debug_sbuf_generator(void *sbuf, PICO_DTYPE_T dtype, size_t count,
                     MPI_Comm comm, test_routine_t test_routine);
 
 #endif // DEBUG

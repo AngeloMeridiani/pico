@@ -41,7 +41,7 @@ class AlgorithmsStep(StepScreen):
 
                         pico_checks = []
                         if lib.pico_backend:
-                            pico_algos = alg_get_list(str(lib.standard), "PicoLib", coll)
+                            pico_algos = alg_get_list(str(lib.standard), "LibPico", coll)
                             pico_checks = [
                                 Checkbox(
                                     f"({lib.name}) {key} (PICO custom)",
@@ -126,7 +126,7 @@ class AlgorithmsStep(StepScreen):
                     if lib.get_id_name() == lib_id
                 )
 
-                algo_data = alg_get_algo(str(library.standard), str(library.lib_type) if not pico else "PicoLib", coll_str, algo_key )
+                algo_data = alg_get_algo(str(library.standard), str(library.lib_type) if not pico else "LibPico", coll_str, algo_key )
                 if not algo_data:
                     raise ValueError(f"Algorithm {algo_key} not found in {library.lib_type}/{coll_str}.json")
 
@@ -146,9 +146,96 @@ class AlgorithmsStep(StepScreen):
             self.prev(LibrariesStep)
 
 
-    # TODO:
-    def get_help_desc(self):
-        return "a","b"
+    def get_help_desc(self) -> Tuple[str, str]:
+        focused = self.focused
+        default = (
+            "Algorithm Selection",
+            "Tick at least one algorithm per collective and per library. Use number keys to switch tabs quickly."
+        )
+
+        if not focused or not getattr(focused, "id", None):
+            return default
+
+        fid = focused.id
+
+        if fid.startswith("tab-"):
+            coll = fid.split("-", 1)[1]
+            return (
+                f"{coll.capitalize()} Tab",
+                "Navigate each collective tab and choose algorithms that satisfy your requirements."
+            )
+
+        if fid.startswith("prev"):
+            return (
+                "Previous Step",
+                "Return to library configuration (shortcut: `p`)."
+            )
+
+        if fid.startswith("next"):
+            return (
+                "Next Step",
+                "Enabled once every selected collective/library pair has at least one algorithm (shortcut: `n`)."
+            )
+
+        if "-" not in fid:
+            return default
+
+        parts = fid.split("-")
+        pico = False
+        if len(parts) == 4 and parts[-1] == "pico":
+            pico = True
+            coll_name, algo_key, lib_id = parts[0], parts[1], parts[2]
+        elif len(parts) == 3:
+            coll_name, algo_key, lib_id = parts
+        else:
+            return default
+
+        library = next((lib for lib in self.session.libraries if lib.get_id_name() == lib_id), None)
+        if not library:
+            return default
+
+        lib_label = library.name
+        lib_kind = "LibPico" if pico else str(library.lib_type)
+        try:
+            algo_meta = alg_get_algo(str(library.standard), lib_kind, coll_name, algo_key)
+        except ValueError:
+            return (
+                "Algorithm Metadata",
+                "Algorithm description unavailable; check config/algorithms/ files."
+            )
+
+        desc = algo_meta.get("desc", "No description provided.")
+        selection = algo_meta.get("selection")
+        tags = algo_meta.get("tags", [])
+        constraints = algo_meta.get("constraints", [])
+
+        extras = []
+        if selection is not None:
+            extras.append(f"selector value: {selection}")
+        if tags:
+            extras.append(f"tags: {', '.join(tags)}")
+        if constraints:
+            formatted = []
+            for constraint in constraints:
+                key = constraint.get("key", "?")
+                conds = []
+                for cond in constraint.get("conditions", []):
+                    op = cond.get("operator", "")
+                    val = cond.get("value", "")
+                    conds.append(f"{op} {val}")
+                if conds:
+                    formatted.append(f"{key} ({' and '.join(conds)})")
+            if formatted:
+                extras.append(f"constraints: {', '.join(formatted)}")
+
+        summary = desc
+        if extras:
+            summary += "\n" + "; ".join(extras)
+
+        return (
+            f"{coll_name.capitalize()} · {lib_label}",
+            summary
+        )
 
 
     def _update_next_button_state(self) -> None:

@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import List
 
 # Base config directory (assumes this file sits next to `config/`)
-BINE_DIR = Path(__file__).parent.parent
-CONFIG_DIR = BINE_DIR / "config"
+PICO_DIR = Path(__file__).parent.parent
+CONFIG_DIR = PICO_DIR / "config"
 ALG_DIR = CONFIG_DIR / "algorithms"
 ENV = 'environment'
 ENV_DIR = CONFIG_DIR / ENV
