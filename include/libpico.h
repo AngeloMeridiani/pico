@@ -10,6 +10,7 @@
 #include <stdio.h>
 #endif
 
+#include <stddef.h>
 #include <mpi.h>
 
 #define ALLREDUCE_MPI_ARGS        const void *sbuf, void *rbuf, size_t count, \

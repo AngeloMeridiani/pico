@@ -9,6 +9,7 @@
  */
 #include "../schedgen.hpp"
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -261,12 +262,27 @@ void reduce_scatter_allgather_allreduce(Goal *goal, int rank, int comm_size,
                                        ctx.replace_comp_time);
 }
 
+bool ring_allreduce_validator(int comm_size, int datasize,
+                              const CollectiveContext &ctx,
+                              std::string *reason) {
+  (void)datasize;
+  if (ctx.element_count > 0 && ctx.element_count < comm_size) {
+    if (reason) {
+      *reason = "element count " + std::to_string(ctx.element_count) +
+                " smaller than communicator size " +
+                std::to_string(comm_size);
+    }
+    return false;
+  }
+  return true;
+}
+
 bool register_algorithms() {
   register_collective_algorithm(CollectiveKind::Allreduce,
                                 "recursive_doubling",
                                 recursive_doubling_allreduce);
   register_collective_algorithm(CollectiveKind::Allreduce, "ring",
-                                ring_allreduce);
+                                ring_allreduce, ring_allreduce_validator);
   register_collective_algorithm(CollectiveKind::Allreduce,
                                 "reduce_scatter_allgather",
                                 reduce_scatter_allgather_allreduce);

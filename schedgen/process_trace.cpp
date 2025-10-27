@@ -454,21 +454,35 @@ struct SelectedAlgorithm {
   CollectiveGenerator generator;
 };
 
-static SelectedAlgorithm resolve_algorithm(CollectiveSelector &selector,
-                                           CollectiveKind kind,
-                                           int comm_size, int msg_size) {
-  std::string chosen = selector.choose(kind, comm_size, msg_size);
-  std::string fallback = selector.fallback_algorithm(kind);
-  std::string selected = chosen.empty() ? fallback : chosen;
-  CollectiveGenerator gen;
-  if (!selected.empty()) {
-    gen = lookup_collective_algorithm(kind, selected);
-    if (!gen && !fallback.empty() && selected != fallback) {
-      selected = fallback;
-      gen = lookup_collective_algorithm(kind, selected);
-    }
+static SelectedAlgorithm try_algorithm(CollectiveKind kind,
+                                       const std::string &name,
+                                       int comm_size, int msg_size,
+                                       const CollectiveContext &ctx,
+                                       std::string *reason) {
+  SelectedAlgorithm selected;
+  if (name.empty()) {
+    if (reason)
+      reason->clear();
+    return selected;
   }
-  return {selected, gen};
+  CollectiveAlgorithm algo = lookup_collective_algorithm(kind, name);
+  if (!algo) {
+    if (reason)
+      *reason = "algorithm not registered";
+    return selected;
+  }
+  if (algo.validator &&
+      !algo.validator(comm_size, msg_size, ctx, reason)) {
+    if (reason && reason->empty()) {
+      *reason = "algorithm rejected by validator";
+    }
+    return selected;
+  }
+  if (reason)
+    reason->clear();
+  selected.name = name;
+  selected.generator = algo.generator;
+  return selected;
 }
 
 static SelectedAlgorithm select_algorithm_or_warn(CollectiveSelector &selector,
@@ -476,19 +490,57 @@ static SelectedAlgorithm select_algorithm_or_warn(CollectiveSelector &selector,
                                                   int comm_size,
                                                   int msg_size,
                                                   const char *label,
-                                                  bool debug) {
-  SelectedAlgorithm selected =
-      resolve_algorithm(selector, kind, comm_size, msg_size);
-  if (!selected.generator) {
+                                                  bool debug,
+                                                  const CollectiveContext &ctx) {
+  std::string chosen = selector.choose(kind, comm_size, msg_size);
+  std::string fallback = selector.fallback_algorithm(kind);
+  std::vector<std::pair<std::string, bool>> candidates;
+  if (!chosen.empty()) {
+    candidates.emplace_back(chosen, false);
+  }
+  if (!fallback.empty() &&
+      (chosen.empty() || fallback != chosen)) {
+    candidates.emplace_back(fallback, true);
+  }
+  if (candidates.empty() && fallback.empty()) {
     std::cerr << "[selector] No algorithm available for "
               << collective_kind_to_string(kind) << " (comm=" << comm_size
               << ", msg=" << msg_size << ")" << std::endl;
-  } else if (debug) {
-    std::cout << "[selector] " << label << " -> " << selected.name
-              << " (comm=" << comm_size << ", msg=" << msg_size << ")"
-              << std::endl;
+    return SelectedAlgorithm();
   }
-  return selected;
+
+  for (const auto &candidate : candidates) {
+    std::string reason;
+    SelectedAlgorithm selected =
+        try_algorithm(kind, candidate.first, comm_size, msg_size, ctx, &reason);
+    if (selected.generator) {
+      if (candidate.second && !chosen.empty() &&
+          candidate.first != chosen) {
+        std::cerr << "[selector] falling back to '" << candidate.first
+                  << "' for " << label << " after '" << chosen
+                  << "' was rejected." << std::endl;
+      }
+      if (debug) {
+        std::cout << "[selector] " << label << " -> " << selected.name
+                  << " (comm=" << comm_size << ", msg=" << msg_size << ")"
+                  << std::endl;
+      }
+      return selected;
+    }
+
+    if (!candidate.first.empty()) {
+      std::string msg =
+          reason.empty() ? "algorithm unavailable" : reason;
+      std::cerr << "[selector] rejecting " << label << " algorithm '"
+                << candidate.first << "': " << msg << " (comm=" << comm_size
+                << ", msg=" << msg_size << ")" << std::endl;
+    }
+  }
+
+  std::cerr << "[selector] No algorithm available for "
+            << collective_kind_to_string(kind) << " (comm=" << comm_size
+            << ", msg=" << msg_size << ")" << std::endl;
+  return SelectedAlgorithm();
 }
 
 void process_trace(gengetopt_args_info *args_info) {
@@ -1342,7 +1394,7 @@ void process_trace(gengetopt_args_info *args_info) {
             CollectiveContext ctx;
             SelectedAlgorithm selected = select_algorithm_or_warn(
                 selector, CollectiveKind::Barrier, hosts * extrhosts, 1,
-                "barrier", selector_debug);
+                "barrier", selector_debug, ctx);
             if (selected.generator) {
               selected.generator(&goal, host + hosts * extrhost,
                                  hosts * extrhosts, 1, ctx);
@@ -1398,9 +1450,11 @@ void process_trace(gengetopt_args_info *args_info) {
             goal.StartOp();
             CollectiveContext ctx;
             ctx.replace_comp_time = args_info->rpl_dep_cmp_arg;
+            ctx.element_count = count;
+            ctx.datatype_bytes = size;
             SelectedAlgorithm selected = select_algorithm_or_warn(
                 selector, CollectiveKind::Allreduce, hosts * extrhosts,
-                count * size, "allreduce", selector_debug);
+                count * size, "allreduce", selector_debug, ctx);
             if (selected.generator) {
               selected.generator(&goal, host + hosts * extrhost,
                                  hosts * extrhosts, count * size, ctx);
@@ -1457,9 +1511,11 @@ void process_trace(gengetopt_args_info *args_info) {
             goal.SetTag(collsbase + nops);
             goal.StartOp();
             CollectiveContext ctx;
+            ctx.element_count = count;
+            ctx.datatype_bytes = size;
             SelectedAlgorithm selected = select_algorithm_or_warn(
                 selector, CollectiveKind::Iallreduce, hosts * extrhosts,
-                count * size, "iallreduce", selector_debug);
+                count * size, "iallreduce", selector_debug, ctx);
             if (selected.generator) {
               selected.generator(&goal, host + hosts * extrhost,
                                  hosts * extrhosts, count * size, ctx);
@@ -1517,9 +1573,11 @@ void process_trace(gengetopt_args_info *args_info) {
             goal.StartOp();
             CollectiveContext ctx;
             ctx.root = root;
+            ctx.element_count = count;
+            ctx.datatype_bytes = size;
             SelectedAlgorithm selected = select_algorithm_or_warn(
                 selector, CollectiveKind::Bcast, hosts * extrhosts,
-                count * size, "bcast", selector_debug);
+                count * size, "bcast", selector_debug, ctx);
             if (selected.generator) {
               selected.generator(&goal, host + hosts * extrhost,
                                  hosts * extrhosts, count * size, ctx);
@@ -1576,9 +1634,11 @@ void process_trace(gengetopt_args_info *args_info) {
             goal.SetTag(MAKE_TAG(comm, (collsbase + nops)));
             goal.StartOp();
             CollectiveContext ctx;
+            ctx.element_count = count;
+            ctx.datatype_bytes = size;
             SelectedAlgorithm selected = select_algorithm_or_warn(
                 selector, CollectiveKind::Allgather, hosts * extrhosts,
-                count * size, "allgather", selector_debug);
+                count * size, "allgather", selector_debug, ctx);
             if (selected.generator) {
               selected.generator(&goal, host + hosts * extrhost,
                                  hosts * extrhosts, count * size, ctx);
@@ -1643,9 +1703,11 @@ void process_trace(gengetopt_args_info *args_info) {
             goal.StartOp();
             CollectiveContext ctx;
             ctx.root = root;
+            ctx.element_count = count;
+            ctx.datatype_bytes = size;
             SelectedAlgorithm selected = select_algorithm_or_warn(
                 selector, CollectiveKind::Reduce, hosts * extrhosts,
-                count * size, "reduce", selector_debug);
+                count * size, "reduce", selector_debug, ctx);
             if (selected.generator) {
               selected.generator(&goal, host + hosts * extrhost,
                                  hosts * extrhosts, count * size, ctx);
@@ -1703,9 +1765,11 @@ void process_trace(gengetopt_args_info *args_info) {
             goal.SetTag(MAKE_TAG(comm, (collsbase + nops)));
             goal.StartOp();
             CollectiveContext ctx;
+            ctx.element_count = count;
+            ctx.datatype_bytes = size;
             SelectedAlgorithm selected = select_algorithm_or_warn(
                 selector, CollectiveKind::Alltoall, hosts * extrhosts,
-                count * size, "alltoall", selector_debug);
+                count * size, "alltoall", selector_debug, ctx);
             if (selected.generator) {
               selected.generator(&goal, host + hosts * extrhost,
                                  hosts * extrhosts, count * size, ctx);

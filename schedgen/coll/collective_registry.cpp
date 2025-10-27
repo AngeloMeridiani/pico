@@ -8,7 +8,7 @@
 
 namespace {
 
-using AlgorithmMap = std::map<std::string, CollectiveGenerator>;
+using AlgorithmMap = std::map<std::string, CollectiveAlgorithm>;
 
 struct Registry {
   std::map<CollectiveKind, AlgorithmMap> per_collective;
@@ -24,23 +24,25 @@ Registry &registry() {
 
 void register_collective_algorithm(CollectiveKind kind,
                                    const std::string &name,
-                                   CollectiveGenerator generator) {
+                                   CollectiveGenerator generator,
+                                   CollectiveValidator validator) {
   Registry &reg = registry();
   std::lock_guard<std::mutex> guard(reg.mutex);
-  reg.per_collective[kind][name] = std::move(generator);
+  reg.per_collective[kind][name] =
+      CollectiveAlgorithm{std::move(generator), std::move(validator)};
 }
 
-CollectiveGenerator
-lookup_collective_algorithm(CollectiveKind kind, const std::string &name) {
+CollectiveAlgorithm lookup_collective_algorithm(CollectiveKind kind,
+                                                const std::string &name) {
   Registry &reg = registry();
   std::lock_guard<std::mutex> guard(reg.mutex);
   auto coll_it = reg.per_collective.find(kind);
   if (coll_it == reg.per_collective.end()) {
-    return CollectiveGenerator();
+    return CollectiveAlgorithm();
   }
   auto algo_it = coll_it->second.find(name);
   if (algo_it == coll_it->second.end()) {
-    return CollectiveGenerator();
+    return CollectiveAlgorithm();
   }
   return algo_it->second;
 }

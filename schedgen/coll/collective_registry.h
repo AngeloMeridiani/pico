@@ -27,18 +27,33 @@ struct CollectiveContext {
   int root = 0;
   int replace_comp_time = -1;
   int segmentsize = 0;
+  int element_count = 0;
+  int datatype_bytes = 0;
 };
 
 using CollectiveGenerator =
     std::function<void(Goal *, int rank, int comm_size, int data_size,
                        const CollectiveContext &ctx)>;
 
+using CollectiveValidator = std::function<bool(
+    int comm_size, int data_size, const CollectiveContext &ctx,
+    std::string *reason)>;
+
+struct CollectiveAlgorithm {
+  CollectiveGenerator generator;
+  CollectiveValidator validator;
+
+  explicit operator bool() const { return static_cast<bool>(generator); }
+};
+
 void register_collective_algorithm(CollectiveKind kind,
                                    const std::string &name,
-                                   CollectiveGenerator generator);
+                                   CollectiveGenerator generator,
+                                   CollectiveValidator validator =
+                                       CollectiveValidator());
 
-CollectiveGenerator
-lookup_collective_algorithm(CollectiveKind kind, const std::string &name);
+CollectiveAlgorithm lookup_collective_algorithm(CollectiveKind kind,
+                                                const std::string &name);
 
 std::vector<std::string> list_collective_algorithms(CollectiveKind kind);
 

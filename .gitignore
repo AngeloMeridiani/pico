@@ -26,3 +26,4 @@ tracer/*.pdf
 tracer/sinfo_summary.csv
 tracer/sinfo/*.pdf
 **/__pycache__/
+ai_traces/
