@@ -80,6 +80,7 @@ int bcast_bine_lat_new(BCAST_MPI_ARGS);
 int bcast_bine_lat_i_new(BCAST_MPI_ARGS);
 int bcast_bine_bdw_remap(BCAST_MPI_ARGS);
 
+int gather_linear(GATHER_MPI_ARGS);
 int gather_bine(GATHER_MPI_ARGS);
 
 int reduce_bine_lat(REDUCE_MPI_ARGS);

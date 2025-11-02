@@ -2389,6 +2389,29 @@
           "internal"
         ]
       },
+      "linear_over": {
+        "desc": "libpico external linear algorithm. It consists in the root receiving messages from all other processes.",
+        "library": {
+          "libpico": "1.0.0"
+        },
+        "constraints": [
+          {
+            "key": "count",
+            "conditions": [
+              {
+                "operator": ">=",
+                "value": "comm_sz"
+              }
+            ]
+          }
+        ],
+        "cvar": "auto",
+        "dynamic_rule": 0,
+        "tags": [
+          "linear",
+          "external"
+        ]
+      },
       "bine_over": {
         "desc": "libpico external bine algorithm. It uses a binomial tree pattern of communication choosing its peer utilizing `bine` peer selection method `pi`. It works only if `comm` is a power of 2 and root is 0.",
         "library": {

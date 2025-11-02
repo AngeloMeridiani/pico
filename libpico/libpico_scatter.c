@@ -21,7 +21,7 @@ int scatter_linear(const void *sbuf, size_t scount, MPI_Datatype sdtype, void *r
   int i, rank, size, err;
   MPI_Aint lb, s_ext, r_ext;
   MPI_Aint s_block_span, r_block_span;  /* bytes spanned per rank on send/recv sides */
-  char *tmpbuf;
+  char *tmp_buf;
 
   /* Initialize */
   err = MPI_Comm_size(comm, &size);
@@ -42,17 +42,19 @@ int scatter_linear(const void *sbuf, size_t scount, MPI_Datatype sdtype, void *r
   s_block_span = (MPI_Aint)scount * s_ext;  /* stride between neighbors in sbuf */
   r_block_span = (MPI_Aint)rcount * r_ext;  /* max we should touch in rbuf    */
 
-  tmpbuf = (char *)sbuf;
+  tmp_buf = (char *)sbuf;
   for (i = 0; i < size; ++i) {
+    tmp_buf = (char *)sbuf + (MPI_Aint)i * s_block_span;
+
     if (i == rank) {
       if (rbuf == MPI_IN_PLACE) { continue; }
+
       MPI_Aint n = s_block_span < r_block_span ? s_block_span : r_block_span;
-      memcpy(rbuf, tmpbuf, (size_t)n);
+      memcpy(rbuf, tmp_buf, (size_t)n);
     } else {
-      err = MPI_Send(tmpbuf, (int)scount, sdtype, i, 0, comm);
+      err = MPI_Send(tmp_buf, (int)scount, sdtype, i, 0, comm);
       if (MPI_SUCCESS != err) return err;
     }
-    tmpbuf += s_block_span;
   }
   /* All done */
 

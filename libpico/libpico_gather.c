@@ -13,6 +13,54 @@
 #include "libpico_utils.h"
 
 
+
+/**
+ * Open MPI linear gather function copied from 
+ * https://github.com/open-mpi/ompi/blob/3a2e90895e15822912002be1e9aea8032c4c0bae/ompi/mca/coll/base/coll_base_gather.c#L371
+ */
+int gather_linear(const void *sbuf, size_t scount, MPI_Datatype sdtype,
+          void *rbuf, size_t rcount, MPI_Datatype rdtype,
+          int root, MPI_Comm comm)
+{
+  int i, rank, size, err;
+  MPI_Aint lb, s_ext, r_ext;
+  MPI_Aint s_block_span, r_block_span;  /* byte span of one rank's block */
+  char *tmp_buf;
+
+  /* Init */
+  MPI_Comm_size(comm, &size);
+  MPI_Comm_rank(comm, &rank);
+
+  /* Non-root: send and return */
+  if (rank != root) {
+    return MPI_Send(sbuf, (int)scount, sdtype, root, 0, comm);
+  }
+
+  /* Root: compute spans/stride */
+  MPI_Type_get_extent(sdtype, &lb, &s_ext);
+  MPI_Type_get_extent(rdtype, &lb, &r_ext);
+  assert(lb == 0); // should be true for basic types
+
+  s_block_span = (MPI_Aint)scount * s_ext;
+  r_block_span = (MPI_Aint)rcount * r_ext;
+
+  for (i = 0; i < size; ++i) {
+    tmp_buf = (char *)rbuf + (MPI_Aint)i * r_block_span;
+
+    if (i == rank) {
+      if (sbuf == MPI_IN_PLACE) { continue; }
+
+      MPI_Aint n = (s_block_span < r_block_span) ? s_block_span : r_block_span;
+      memcpy(tmp_buf, sbuf, (size_t)n);
+    } else {
+      err = MPI_Recv(tmp_buf, (int)rcount, rdtype, i, 0, comm, MPI_STATUS_IGNORE);
+      if (MPI_SUCCESS != err) return err;
+    }
+  }
+
+  return MPI_SUCCESS;
+}
+
 int gather_bine(const void *sendbuf, size_t sendcount, MPI_Datatype dt, void *recvbuf, size_t recvcount, MPI_Datatype recvtype, int root, MPI_Comm comm){
   assert(sendcount == recvcount && dt == recvtype);
   int size, rank, dtsize, err = MPI_SUCCESS;
