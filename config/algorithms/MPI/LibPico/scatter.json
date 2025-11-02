@@ -1,4 +1,23 @@
 {
+  "linear_over": {
+    "desc": "libpico linear scatter copied from Open MPI basic",
+    "version": "1.0.0",
+    "constraints": [
+      {
+        "key": "count",
+        "conditions": [
+          {
+            "operator": ">=",
+            "value": "comm_sz"
+          }
+        ]
+      }
+    ],
+    "selection": "pico",
+    "tags": [
+      "external"
+    ]
+  },
   "bine_over": {
     "desc": "libpico external bine algorithm.",
     "version": "1.0.0",

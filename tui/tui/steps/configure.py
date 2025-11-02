@@ -133,7 +133,7 @@ class ConfigureStep(StepScreen):
                 ),
                 Vertical(
                     Static("Output Level", classes="field-label"),
-                    Select( output_lev, id="output-select", prompt="Select Output Level", value=OutputLevel.STATISTICS)
+                    Select( output_lev, id="output-select", prompt="Select Output Level", value=OutputLevel.SUMMARY)
                 ),
                 classes="field-small"
             ),

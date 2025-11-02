@@ -11,6 +11,54 @@
 #include "libpico.h"
 #include "libpico_utils.h"
 
+/**
+ * Open MPI linear scatter function copied from 
+ * https://github.com/open-mpi/ompi/blob/3a2e90895e15822912002be1e9aea8032c4c0bae/ompi/mca/coll/base/coll_base_scatter.c#L223
+ */
+int scatter_linear(const void *sbuf, size_t scount, MPI_Datatype sdtype, void *rbuf,
+                   size_t rcount, MPI_Datatype rdtype, int root, MPI_Comm comm)
+{
+  int i, rank, size, err;
+  MPI_Aint lb, s_ext, r_ext;
+  MPI_Aint s_block_span, r_block_span;  /* bytes spanned per rank on send/recv sides */
+  char *tmpbuf;
+
+  /* Initialize */
+  err = MPI_Comm_size(comm, &size);
+  err = MPI_Comm_rank(comm, &rank);
+
+  /* If not root, receive data. */
+  if (rank != root) {
+    err = MPI_Recv(rbuf, (int)rcount, rdtype, root, 0, comm, MPI_STATUS_IGNORE);
+    return err;
+  }
+
+  /* I am the root, loop sending data. */
+  /* Root: compute strides/spans */
+  MPI_Type_get_extent(sdtype, &lb, &s_ext);
+  MPI_Type_get_extent(rdtype, &lb, &r_ext);
+  assert(lb == 0); /* should be true for basic types */
+
+  s_block_span = (MPI_Aint)scount * s_ext;  /* stride between neighbors in sbuf */
+  r_block_span = (MPI_Aint)rcount * r_ext;  /* max we should touch in rbuf    */
+
+  tmpbuf = (char *)sbuf;
+  for (i = 0; i < size; ++i) {
+    if (i == rank) {
+      if (rbuf == MPI_IN_PLACE) { continue; }
+      MPI_Aint n = s_block_span < r_block_span ? s_block_span : r_block_span;
+      memcpy(rbuf, tmpbuf, (size_t)n);
+    } else {
+      err = MPI_Send(tmpbuf, (int)scount, sdtype, i, 0, comm);
+      if (MPI_SUCCESS != err) return err;
+    }
+    tmpbuf += s_block_span;
+  }
+  /* All done */
+
+  return MPI_SUCCESS;
+}
+
 int scatter_bine(const void *sendbuf, size_t sendcount, MPI_Datatype dt,
                   void *recvbuf, size_t recvcount, MPI_Datatype recvtype, int root, MPI_Comm comm)
 {

@@ -3352,6 +3352,28 @@
           "internal"
         ]
       },
+      "linear_over": {
+        "desc": "libpico linear scatter copied from Open MPI basic",
+        "library": {
+          "libpico": "1.0.0"
+        },
+        "constraints": [
+          {
+            "key": "count",
+            "conditions": [
+              {
+                "operator": ">=",
+                "value": "comm_sz"
+              }
+            ]
+          }
+        ],
+        "cvar": "auto",
+        "dynamic_rule": 0,
+        "tags": [
+          "external"
+        ]
+      },
       "bine_over": {
         "desc": "libpico external bine algorithm.",
         "library": {
