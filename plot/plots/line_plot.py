@@ -8,6 +8,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import numpy as np
 
 from ..utils import (
     PlotMetadata,
@@ -30,13 +31,115 @@ def _resolve_output_dir(system: str, output_dir: str | Path | None) -> Path:
     return ensure_dir(Path("plot") / system)
 
 
+def _collapse_preaggregated(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge duplicated rows (same algorithm/buffer size) by recomputing summary
+    statistics using the provided aggregates.  This prevents seaborn from
+    collapsing already-aggregated data with a second estimator pass.
+    """
+    key_cols = ["algo_name", "buffer_size"]
+    if not set(key_cols).issubset(df.columns):
+        return df
+
+    duplicates = df.duplicated(key_cols, keep=False)
+    if not duplicates.any():
+        return df
+
+    collapsed_rows: list[pd.Series] = []
+    for _, group in df.groupby(key_cols, sort=False):
+        collapsed_rows.append(_merge_group(group))
+
+    collapsed = pd.DataFrame(collapsed_rows)
+
+    # Ensure all original columns are present and in the same order
+    for col in df.columns:
+        if col not in collapsed.columns:
+            collapsed[col] = np.nan
+
+    return collapsed[df.columns]
+
+
+def _merge_group(group: pd.DataFrame) -> pd.Series:
+    base = group.iloc[0].copy()
+
+    if "n_iter" in group.columns:
+        weights = group["n_iter"].astype(float).fillna(0.0)
+    else:
+        weights = pd.Series(np.ones(len(group)), index=group.index, dtype=float)
+
+    total_weight = float(weights.sum())
+    if total_weight <= 0:
+        weights = pd.Series(np.ones(len(group)), index=group.index, dtype=float)
+        total_weight = float(weights.sum())
+
+    weight_array = weights.to_numpy(dtype=float)
+
+    means = group["mean"].astype(float).to_numpy()
+    stds = (
+        group["std"].astype(float).fillna(0.0).to_numpy()
+        if "std" in group.columns
+        else np.zeros_like(means)
+    )
+
+    sum_x = float(np.dot(weight_array, means))
+    sum_x2 = float(np.dot(weight_array, stds**2 + means**2))
+
+    combined_mean = sum_x / total_weight
+    combined_var = max(sum_x2 / total_weight - combined_mean**2, 0.0)
+    combined_std = float(np.sqrt(combined_var))
+
+    base["mean"] = combined_mean
+    if "std" in base.index:
+        base["std"] = combined_std
+    if "n_iter" in base.index:
+        base["n_iter"] = int(round(total_weight))
+
+    def _weighted_average(column: str) -> float | None:
+        if column not in group.columns:
+            return None
+        values = group[column].astype(float)
+        if np.all(np.isnan(values)):
+            return np.nan
+        return float(np.average(values, weights=weight_array))
+
+    for column in ("median", "percentile_10", "percentile_25", "percentile_75", "percentile_90", "iqr"):
+        if column in base.index:
+            value = _weighted_average(column)
+            if value is not None:
+                base[column] = value
+
+    if "min" in base.index:
+        base["min"] = float(group["min"].min())
+    if "max" in base.index:
+        base["max"] = float(group["max"].max())
+    if "num_outliers" in base.index:
+        base["num_outliers"] = int(group["num_outliers"].fillna(0).sum())
+
+    if "standard_error" in base.index:
+        if total_weight > 1:
+            se = float(combined_std / np.sqrt(total_weight))
+            base["standard_error"] = se
+            if "ci_lower" in base.index:
+                base["ci_lower"] = combined_mean - 1.96 * se
+            if "ci_upper" in base.index:
+                base["ci_upper"] = combined_mean + 1.96 * se
+        else:
+            base["standard_error"] = np.nan
+            if "ci_lower" in base.index:
+                base["ci_lower"] = np.nan
+            if "ci_upper" in base.index:
+                base["ci_upper"] = np.nan
+
+    return base
+
+
 def generate_line_plot(
     data: pd.DataFrame,
     *,
     metadata: PlotMetadata,
     collective: str,
     datatype: str,
-    error_col: str | None = "se",
+    error_col: str | None,
     error_mode: str = "band",
     output_dir: str | Path | None = None,
 ) -> Path:
@@ -50,7 +153,7 @@ def generate_line_plot(
 
     sorted_algos = sorted(data["algo_name"].unique().tolist(), key=sort_key)
     palette = build_tab10_palette(sorted_algos)
-    df = data.sort_values("buffer_size").copy()
+    df = _collapse_preaggregated(data).sort_values("buffer_size").copy()
 
     err_series = None
     if error_col == "std" and {"std", "n_iter"}.issubset(df.columns):
@@ -63,6 +166,9 @@ def generate_line_plot(
         err_series = df["iqr"] / 2.0
     elif error_col == "percentiles" and {"percentile_10", "percentile_90"}.issubset(df.columns):
         err_series = (df["percentile_90"] - df["percentile_10"]) / 2.0
+    else:
+        print(f"Warning: could not find valid error columns for '{error_col}'; skipping error bars.")
+        err_series = None
 
     plt.figure(figsize=(12, 8))
     ax = sns.lineplot(
@@ -76,6 +182,8 @@ def generate_line_plot(
         markers=True,
         markersize=9,
         linewidth=2,
+        estimator=None,          # data already aggregated; plot it as-is
+        errorbar=None            # ← turn off CI bands
     )
 
     if err_series is not None:

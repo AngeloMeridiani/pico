@@ -84,8 +84,8 @@ def drop_unused_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     Remove metadata columns that do not vary across the dataframe.
     """
-    drop_cols = [
-        "array_dim",
+    always_drop = ["array_dim"]
+    conditional_drop = [
         "nnodes",
         "system",
         "timestamp",
@@ -94,10 +94,22 @@ def drop_unused_columns(df: pd.DataFrame) -> pd.DataFrame:
         "notes",
         "mpi_lib",
         "mpi_lib_version",
-        "tasks_per_node",
+        "gpu_lib",
+        "gpu_lib_version",
+        "gpu_awareness",
+        "libpico_version",
     ]
-    existing = [col for col in drop_cols if col in df.columns]
-    return df.drop(columns=existing, errors="ignore")
+
+    cleaned = df.drop(columns=[col for col in always_drop if col in df.columns], errors="ignore")
+
+    for col in conditional_drop:
+        if col not in cleaned.columns:
+            continue
+        uniques = cleaned[col].dropna().unique()
+        if len(uniques) <= 1:
+            cleaned = cleaned.drop(columns=col)
+
+    return cleaned
 
 
 def normalize_dataset(
