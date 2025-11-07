@@ -45,16 +45,31 @@ def parse_runs(arg_runs: list[str] | None) -> list[tuple[str, int]]:
         out.append((ts, int(nodes_s)))
     return out
 
+BASELINE_DEFAULTS = {
+    "ALLGATHER": "recursive_doubling_ompi",
+    "REDUCE_SCATTER": "recursive_halving_ompi",
+}
+
+BASELINE_OVERRIDES = {
+    "lumi": {
+        "ALLGATHER": "recursive_doubling_mpich",
+        "REDUCE_SCATTER": "recursive_halving_mpich",
+    }
+}
+
+def resolve_baseline(system: str, collective: str) -> str:
+    system_key = system.lower()
+    collective_key = collective.upper()
+    override = BASELINE_OVERRIDES.get(system_key, {}).get(collective_key)
+    if override:
+        return override
+    return BASELINE_DEFAULTS[collective_key]
+
 def main() -> None:
     args = build_parser().parse_args()
     runs = parse_runs(args.runs)
 
-    # Baseline mapping per collective
-    baseline_by_collective = {
-        "ALLGATHER": "recursive_doubling_ompi",
-        "REDUCE_SCATTER": "recursive_halving_ompi",
-    }
-    baseline = baseline_by_collective[args.collective]
+    baseline = resolve_baseline(args.system, args.collective)
 
     # Category patterns (include 'bine_2_blocks' only for ALLGATHER)
     bine_patterns = ["bine_block_by_block", "bine_permute_remap", "bine_send_remap"]
@@ -96,8 +111,16 @@ def main() -> None:
     bandwidth_df = pd.concat(frames, ignore_index=True)
 
     # Preserve your node ordering helper from ComparisonHeatmapConfig
-    ordered_nodes = [node for node in cfg.sorted_nodes() if node in bandwidth_df["Nodes"].unique()]
-    ordered_nodes = list(reversed(ordered_nodes))
+    unique_nodes = [str(n) for n in bandwidth_df["Nodes"].unique()]
+
+    def sort_nodes_desc(nodes: list[str]) -> list[str]:
+        return sorted(nodes, key=lambda n: int(n))
+
+    ordered_nodes = [node for node in cfg.sorted_nodes() if node in unique_nodes]
+    if ordered_nodes:
+        ordered_nodes = sort_nodes_desc(ordered_nodes)
+    else:
+        ordered_nodes = sort_nodes_desc(unique_nodes)
 
     def classify_algo(name: str) -> str | None:
         lower = name.lower()
@@ -197,7 +220,8 @@ def main() -> None:
         ensure_dir(outfile.parent)
     else:
         outdir = ensure_dir(Path("plot") / args.system / "heatmaps" / args.collective.lower())
-        outfile = outdir / "best_bine_variant.pdf"
+        outname = args.system + "_" + args.collective.lower() +"_best_bine_variant.pdf"
+        outfile = outdir / outname
 
     plt.savefig(outfile, bbox_inches="tight")
     plt.close()
