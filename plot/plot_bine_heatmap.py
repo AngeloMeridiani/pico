@@ -171,9 +171,10 @@ def main() -> None:
     heatmap_data = matrix_df.pivot(index="buffer_size", columns="Nodes", values="code")
     heatmap_data = heatmap_data.reindex(index=sorted(heatmap_data.index), columns=ordered_nodes)
 
-    # Colormap (tab10 first N colors)
-    tab10 = plt.get_cmap("tab10")
-    colors = [tab10(i) for i in range(len(code_map))]
+    tab10 = plt.get_cmap("tab10") # Colormap (tab10 first N colors)
+    allowed_indices = [i for i in range(10) if i != 3] # Allowed tab10 indices (skip red=3)
+    # Use only as many colors as categories exist
+    colors = [tab10(i) for i in allowed_indices[:len(code_map)]]
     cmap = ListedColormap(colors)
     cmap.set_bad(color='white')
 
@@ -202,7 +203,7 @@ def main() -> None:
             ratio = ratio_map.get((buffer_size, node))
             ax.text(j + 0.5, i + 0.38, letter, ha="center", va="center", color="white", fontsize=BIG_FONT_SIZE, weight="bold")
             if ratio is not None and np.isfinite(ratio):
-                ax.text(j + 0.5, i + 0.74, f"{ratio * 100:.0f}%", ha="center", va="center", color="white", fontsize=SMALL_FONT_SIZE - 1)
+                ax.text(j + 0.5, i + 0.74, f"{ratio:.2f}×", ha="center", va="center", color="white", fontsize=SMALL_FONT_SIZE - 1)
 
     buffer_labels = [human_readable_size(int(size)) for size in heatmap_data.index]
     ax.set_yticks(np.arange(len(buffer_labels)) + 0.5)
