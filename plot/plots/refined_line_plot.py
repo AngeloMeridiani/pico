@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from ..utils import apply_adaptive_legend, ensure_dir, style_axes
+from ..utils import apply_adaptive_legend, ensure_dir, save_figure, style_axes
 from .refined_loader import RefinedDataset
 
 
@@ -22,6 +22,7 @@ def generate_refined_line_plot(
     name: str,
     *,
     output_dir: str | Path | None = None,
+    output_format: str = "png",
 ) -> Path:
     df = pd.DataFrame(dataset.data)
     if df.empty:
@@ -66,6 +67,6 @@ def generate_refined_line_plot(
 
     target_dir = ensure_dir(output_dir or Path('plots'))
     out_path = Path(target_dir) / f"{name.replace(',', '').replace(' ', '_').lower()}_sd_line.png"
-    plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    written = save_figure(plt.gcf(), out_path, output_format, dpi=300, bbox_inches='tight')
     plt.close()
-    return out_path
+    return written[0]

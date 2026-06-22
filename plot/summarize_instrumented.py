@@ -111,9 +111,9 @@ def infer_test_type(root_dir: str, filepath: str) -> str:
     comps = [c.lower() for c in rel.split(os.sep)]
 
     if "0" in comps:
-        return "gpu"
-    if "1" in comps:
         return "cpu"
+    if "1" in comps:
+        return "gpu"
     if any("cpu" in c for c in comps):
         return "cpu"
     if any("gpu" in c for c in comps):

@@ -18,6 +18,7 @@ from ..utils import (
     format_bytes,
     gpu_awareness_label,
     gpu_awareness_suffix,
+    save_figure,
     sort_key,
     style_axes,
 )
@@ -40,6 +41,7 @@ def generate_bar_plot(
     threshold: float = 0.15,      # if error > threshold, draw a red marker instead
     marker_loc: float = 0.05,     # vertical offset for red marker
     output_dir: str | Path | None = None,
+    output_format: str = "pdf",
 ) -> Path:
     """
     Render the normalized bar plot for a specific ``collective`` / ``datatype`` pair.
@@ -134,6 +136,6 @@ def generate_bar_plot(
     )
     full_path = target_dir / name
 
-    plt.savefig(full_path, dpi=300)
+    written = save_figure(plt.gcf(), full_path, output_format, dpi=300)
     plt.close()
-    return full_path
+    return written[0]

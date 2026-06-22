@@ -19,6 +19,7 @@ from ..utils import (
     format_bytes,
     gpu_awareness_label,
     gpu_awareness_suffix,
+    save_figure,
     sort_key,
     style_axes,
 )
@@ -146,6 +147,7 @@ def generate_line_plot(
     error_col: str | None,
     error_mode: str = "band",
     output_dir: str | Path | None = None,
+    output_format: str = "pdf",
 ) -> Path:
     """
     Render the latency line plot (log-log) for a single ``collective`` and
@@ -250,10 +252,7 @@ def generate_line_plot(
     target_dir = _resolve_output_dir(metadata.system, output_dir)
     suffix = f"{error_col}_lineplot" if error_col else "lineplot"
     name = f"{collective.lower()}_{metadata.nnodes}_{datatype}_{metadata.timestamp}_{suffix}{gpu_awareness_suffix(gpu_awareness)}.pdf"
-    name_pdf = name.replace(".png", ".pdf")
     full_path = target_dir / name
-    full_path_pdf = target_dir / name_pdf
-    plt.savefig(full_path, dpi=300)
-    plt.savefig(full_path_pdf, dpi=300)
+    written = save_figure(plt.gcf(), full_path, output_format, dpi=300)
     plt.close()
-    return full_path
+    return written[0]

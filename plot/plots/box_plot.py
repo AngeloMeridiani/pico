@@ -9,14 +9,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-import subprocess
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import rcParams
 import matplotlib
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.stats import gmean
 
-from ..utils import ensure_dir, style_axes
+from ..results import METRICS, add_bandwidth_column, discover_summary_dirs, load_summary_frames
+from ..utils import ensure_dir, save_figure, style_axes
 
 
 matplotlib.rc("pdf", fonttype=42)  # To avoid issues with camera-ready submission
@@ -31,7 +31,7 @@ sbrn_palette = sns.color_palette("deep")  # ["#A6C8FF", ...]
 sota_palette = [sbrn_palette[i] for i in range(len(sbrn_palette)) if sbrn_palette[i] != sns.xkcd_rgb["red"]]
 
 
-metrics = ["mean", "median", "percentile_90"]
+metrics = list(METRICS)
 
 
 def human_readable_size(num_bytes):
@@ -51,6 +51,7 @@ class BoxplotConfig:
     exclude: str | None = None
     metric: str = "mean"
     output_dir: str | Path | None = None
+    output_format: str = "pdf"
 
     def nodes_list(self) -> list[str]:
         if isinstance(self.nnodes, str):
@@ -58,65 +59,28 @@ class BoxplotConfig:
         return [str(n) for n in self.nnodes]
 
 def get_summaries(cfg, coll):
-    metadata_file = f"results/{cfg.system}_metadata.csv"
-    if not os.path.exists(metadata_file):
-        raise FileNotFoundError(f"Metadata file {metadata_file} not found.")
-
-    metadata = pd.read_csv(metadata_file)
-    summaries: dict[str, str] = {}
-    for nodes in cfg.nodes_list():
-        if "tasks_per_node" in metadata.columns:
-            filtered_metadata = metadata[
-                (metadata["collective_type"].str.lower() == coll)
-                & (metadata["nnodes"].astype(str) == str(nodes))
-                & (metadata["tasks_per_node"].astype(int) == cfg.tasks_per_node)
-            ]
-        else:
-            filtered_metadata = metadata[
-                (metadata["collective_type"].str.lower() == coll)
-                & (metadata["nnodes"].astype(str) == str(nodes))
-            ]
-
-        if cfg.notes:
-            filtered_metadata = filtered_metadata[filtered_metadata["notes"].str.strip() == cfg.notes.strip()]
-        else:
-            filtered_metadata = filtered_metadata[filtered_metadata["notes"].isnull()]
-
-        if filtered_metadata.empty:
-            continue
-
-        filtered_metadata = filtered_metadata.iloc[-1]
-        summaries[nodes] = f"results/{cfg.system}/{filtered_metadata['timestamp']}/"
-    return summaries
+    return {node: str(path) for node, path in discover_summary_dirs(
+        system=cfg.system,
+        collective=coll,
+        nodes=cfg.nodes_list(),
+        tasks_per_node=cfg.tasks_per_node,
+        notes=cfg.notes,
+        require_all_nodes=False,
+    ).items()}
 
 
 def get_summaries_df(cfg, coll):
-    summaries = get_summaries(cfg, coll)
-    df = pd.DataFrame()
-    # Loop over the summaries
-    for nodes, summary in summaries.items():
-        # Create the summary, by calling the summarize_data.py script
-        # Check if the summary already exists
-        if not os.path.exists(summary + "/aggregated_results_summary.csv") or True:        
-            subprocess.run([
-                "python3",
-                "./plot/summarize_data.py",
-                "--result-dir",
-                summary
-            ],
-            stdout=subprocess.DEVNULL)
-
-        # Read the data
-        s = pd.read_csv(summary + "/aggregated_results_summary.csv")        
-        # Filter by collective type
-        s = s[s["collective_type"].str.lower() == coll]      
-        # Drop the rows where buffer_size is equal to 4 (we do not have them for all results :( )  
-        s = s[s["buffer_size"] != 4]
-        s["Nodes"] = nodes
-
-        # Append s to df
-        df = pd.concat([df, s], ignore_index=True)
-    return df
+    try:
+        return load_summary_frames(
+            system=cfg.system,
+            collective=coll,
+            nodes=cfg.nodes_list(),
+            tasks_per_node=cfg.tasks_per_node,
+            notes=cfg.notes,
+            require_all_nodes=False,
+        )
+    except RuntimeError:
+        return pd.DataFrame()
 
 def algo_name_to_family(algo_name, system):
     if algo_name.lower().startswith("bine"):
@@ -367,6 +331,8 @@ def family_name_to_letter_color(family_name):
 
 def get_data_coll(cfg, coll):
     df = get_summaries_df(cfg, coll)
+    if df.empty:
+        return pd.DataFrame(), 0.0
           
     # Drop the columns I do not need
     df = df[["buffer_size", "Nodes", "algo_name", "mean", "median", "percentile_90"]]
@@ -381,9 +347,7 @@ def get_data_coll(cfg, coll):
     #df = df[~df["algo_name"].str.contains("default_mpich", case=False)]
     
     # Compute the bandwidth for each metric
-    for m in metrics:
-        if m == cfg.metric:
-            df["bandwidth_" + m] = ((df["buffer_size"]*8.0)/(1000.0*1000*1000)) / (df[m].astype(float) / (1000.0*1000*1000))
+    df = add_bandwidth_column(df, cfg.metric)
     
     # drop all the metrics
     for m in metrics:
@@ -441,6 +405,6 @@ def generate_boxplot(cfg: BoxplotConfig) -> Path:
     out_dir = cfg.output_dir or (Path("plot") / cfg.system)
     ensure_dir(out_dir)
     outfile = Path(out_dir) / "boxplot.pdf"
-    plt.savefig(outfile, bbox_inches="tight")
+    written = save_figure(plt.gcf(), outfile, cfg.output_format, bbox_inches="tight")
     plt.close()
-    return outfile
+    return written[0]

@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -16,7 +14,8 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import rcParams
 
-from ..utils import build_ratio_colormap, ensure_dir, human_readable_size
+from ..results import METRICS, add_bandwidth_column, load_summary_frames
+from ..utils import build_ratio_colormap, ensure_dir, human_readable_size, save_figure
 
 # Match legacy styling defaults
 matplotlib.rc("pdf", fonttype=42)
@@ -27,9 +26,6 @@ SMALL_FONT_SIZE = 15
 FMT = ".2f"
 SBRN_PALETTE = sns.color_palette("deep")
 SOTA_PALETTE = [color for color in SBRN_PALETTE if color != sns.xkcd_rgb["red"]]
-METRICS = ["mean", "median", "percentile_90"]
-
-
 @dataclass(slots=True)
 class FamilyHeatmapConfig:
     system: str
@@ -42,77 +38,21 @@ class FamilyHeatmapConfig:
     reference: str = "all"
     hide_y_labels: bool = False
     output_dir: str | Path | None = None
+    output_format: str = "pdf"
 
     def sorted_nodes(self) -> list[str]:
         return [str(n) for n in self.nnodes]
 
 
-def _metadata_filter(metadata: pd.DataFrame, cfg: FamilyHeatmapConfig, nodes: str) -> pd.DataFrame:
-    if "tasks_per_node" in metadata.columns:
-        filtered = metadata[
-            (metadata["collective_type"].str.lower() == cfg.collective.lower())
-            & (metadata["nnodes"].astype(str) == str(nodes))
-            & (metadata["tasks_per_node"].astype(int) == cfg.tasks_per_node)
-        ]
-    else:
-        filtered = metadata[
-            (metadata["collective_type"].str.lower() == cfg.collective.lower())
-            & (metadata["nnodes"].astype(str) == str(nodes))
-        ]
-
-    if cfg.notes:
-        filtered = filtered[filtered["notes"].str.strip() == cfg.notes.strip()]
-    else:
-        filtered = filtered[filtered["notes"].isnull()]
-
-    if cfg.system == "leonardo":
-        filtered = filtered[~filtered["mpi_lib"].str.contains("OMPI_BINE", case=False)]
-    return filtered
-
-
-def _discover_summaries(cfg: FamilyHeatmapConfig) -> dict[str, str]:
-    metadata_file = f"results/{cfg.system}_metadata.csv"
-    if not os.path.exists(metadata_file):
-        raise FileNotFoundError(f"Metadata file {metadata_file} not found.")
-
-    metadata = pd.read_csv(metadata_file)
-    summaries: dict[str, str] = {}
-
-    for nodes in cfg.sorted_nodes():
-        filtered = _metadata_filter(metadata, cfg, nodes)
-        if filtered.empty:
-            raise RuntimeError(f"Metadata file {metadata_file} does not contain the requested data.")
-        last_entry = filtered.iloc[-1]
-        summaries[nodes] = f"results/{cfg.system}/{last_entry['timestamp']}/"
-    return summaries
-
-
 def _load_summaries(cfg: FamilyHeatmapConfig) -> pd.DataFrame:
-    summaries = _discover_summaries(cfg)
-    frames: list[pd.DataFrame] = []
-
-    for nodes, summary_dir in summaries.items():
-        summary_path = os.path.join(summary_dir, "aggregated_results_summary.csv")
-        if not os.path.exists(summary_path):
-            subprocess.run(
-                [
-                    "python3",
-                    "./plot/summarize_data.py",
-                    "--result-dir",
-                    summary_dir,
-                ],
-                stdout=subprocess.DEVNULL,
-                check=False,
-            )
-        df = pd.read_csv(summary_path)
-        df = df[df["collective_type"].str.lower() == cfg.collective.lower()]
-        df = df[df["buffer_size"] != 4]
-        df["Nodes"] = nodes
-        frames.append(df)
-
-    if not frames:
-        raise RuntimeError("No data found for the requested configuration.")
-    return pd.concat(frames, ignore_index=True)
+    return load_summary_frames(
+        system=cfg.system,
+        collective=cfg.collective,
+        nodes=cfg.sorted_nodes(),
+        tasks_per_node=cfg.tasks_per_node,
+        notes=cfg.notes,
+        drop_ompi_bine_on_leonardo=True,
+    )
 
 
 def _algo_name_to_family(algo_name: str, system: str) -> str:
@@ -307,9 +247,9 @@ def generate_family_heatmap(cfg: FamilyHeatmapConfig) -> Path:
     if cfg.exclude:
         df = df[~df["algo_name"].str.contains(cfg.exclude, case=False)]
 
-    for metric in METRICS:
-        if metric == cfg.metric:
-            df[f"bandwidth_{metric}"] = ((df["buffer_size"] * 8.0) / (1e9)) / (df[metric].astype(float) / 1e9)
+    all_buffers = sorted(pd.to_numeric(df["buffer_size"], errors="coerce").dropna().astype(int).unique().tolist())
+
+    df = add_bandwidth_column(df, cfg.metric)
     for metric in METRICS:
         df = df.drop(columns=[metric])
 
@@ -320,9 +260,9 @@ def generate_family_heatmap(cfg: FamilyHeatmapConfig) -> Path:
     numeric_df["cell"] = pd.to_numeric(df["cell"], errors="coerce")
 
     heatmap_data = numeric_df.pivot(index="buffer_size", columns="Nodes", values="cell")
-    heatmap_data = heatmap_data[cfg.sorted_nodes()]
+    heatmap_data = heatmap_data.reindex(index=all_buffers, columns=cfg.sorted_nodes())
     text_data = df.pivot(index="buffer_size", columns="Nodes", values="cell")
-    text_data = text_data[cfg.sorted_nodes()]
+    text_data = text_data.reindex(index=all_buffers, columns=cfg.sorted_nodes())
 
     plt.figure()
     cmap = build_ratio_colormap()
@@ -384,6 +324,6 @@ def generate_family_heatmap(cfg: FamilyHeatmapConfig) -> Path:
         args_str_parts.append(f"{key}_{value}")
     args_str = "_".join(args_str_parts)
     outfile = target_dir / f"{args_str}.pdf"
-    plt.savefig(outfile, bbox_inches="tight")
+    written = save_figure(plt.gcf(), outfile, cfg.output_format, bbox_inches="tight")
     plt.close()
-    return outfile
+    return written[0]

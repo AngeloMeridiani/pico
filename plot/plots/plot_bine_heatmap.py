@@ -13,7 +13,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 
-from ..utils import ensure_dir, human_readable_size
+from ..utils import ensure_dir, human_readable_size, save_figure
 from .comparison_heatmap import BIG_FONT_SIZE, SMALL_FONT_SIZE
 
 METRICS = ("mean", "median", "percentile_90")
@@ -68,6 +68,7 @@ class BestBineHeatmapConfig:
     metric: str = "mean"
     runs: Iterable[str] | None = None
     output: str | Path | None = None
+    output_format: str = "pdf"
 
 
 def _default_runs(system: str) -> list[tuple[str, int]]:
@@ -288,6 +289,6 @@ def generate_best_bine_heatmap(cfg: BestBineHeatmapConfig) -> Path:
         outdir = ensure_dir(Path("plot") / cfg.system / "heatmaps" / collective.lower())
         outfile = outdir / f"{cfg.system}_{collective.lower()}_best_bine_variant.pdf"
 
-    fig.savefig(outfile, bbox_inches="tight")
+    written = save_figure(fig, outfile, cfg.output_format, bbox_inches="tight")
     plt.close(fig)
-    return outfile
+    return written[0]

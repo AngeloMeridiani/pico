@@ -18,6 +18,7 @@ from ..utils import (
     format_bytes,
     gpu_awareness_label,
     gpu_awareness_suffix,
+    save_figure,
     sort_key,
     style_axes,
 )
@@ -39,6 +40,7 @@ def generate_cut_bar_plot(
     threshold: float = 0.5,      # error marker threshold (applies to chosen error metric)
     marker_loc: float = 0.05,    # base vertical offset for red marker
     output_dir: str | Path | None = None,
+    output_format: str = "pdf",
 ) -> Path:
     """
     Render the split bar plot that emphasizes small vs large differences.
@@ -100,7 +102,10 @@ def generate_cut_bar_plot(
         ax_top.get_legend().remove()
 
     y_min = 1.8
-    y_max = min(data["normalized_mean"].max() * 1.1, 10.0)
+    data_max = float(data["normalized_mean"].max())
+    y_max = min(data_max * 1.1, 10.0)
+    if y_max <= y_min:
+        y_max = y_min + max(0.2, abs(y_min) * 0.1)
 
     # Errorbars (selectable). Use different marker offsets for top vs bottom.
     draw_errorbars(
@@ -191,6 +196,6 @@ def generate_cut_bar_plot(
         f"barplot_cut{gpu_awareness_suffix(gpu_awareness)}_{errorbars}.pdf"
     )
     full_path = target_dir / name
-    plt.savefig(full_path, dpi=300)
+    written = save_figure(fig, full_path, output_format, dpi=300)
     plt.close()
-    return full_path
+    return written[0]

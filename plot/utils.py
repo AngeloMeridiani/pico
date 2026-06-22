@@ -13,6 +13,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
+OUTPUT_FORMATS = ("pdf", "png", "both")
+
 
 def ensure_dir(path: str | Path) -> Path:
     """
@@ -21,6 +23,34 @@ def ensure_dir(path: str | Path) -> Path:
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def output_paths(path: str | Path, output_format: str = "pdf") -> list[Path]:
+    """
+    Return concrete output paths for a requested image format.
+
+    ``output_format`` can be ``pdf``, ``png``, or ``both``. The suffix of
+    ``path`` is treated as a default only when no explicit format is selected.
+    """
+    fmt = output_format.lower().strip()
+    if fmt not in OUTPUT_FORMATS:
+        raise ValueError(f"Unsupported output format '{output_format}'. Expected one of {OUTPUT_FORMATS}.")
+
+    base = Path(path)
+    if fmt == "both":
+        return [base.with_suffix(".pdf"), base.with_suffix(".png")]
+    return [base.with_suffix(f".{fmt}")]
+
+
+def save_figure(fig, path: str | Path, output_format: str = "pdf", **savefig_kwargs) -> list[Path]:
+    """
+    Save a matplotlib figure as PDF, PNG, or both and return written paths.
+    """
+    paths = output_paths(path, output_format)
+    for out_path in paths:
+        ensure_dir(out_path.parent)
+        fig.savefig(out_path, **savefig_kwargs)
+    return paths
 
 
 def format_bytes(value: float | int | str) -> str:

@@ -3,9 +3,9 @@
 
 import os
 import sys
-import re
 import argparse
 import tarfile
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -15,6 +15,8 @@ DTYPE_TO_BYTES = {
     'int32': 4,
     'int64': 8,
     'float': 4,
+    'float32': 4,
+    'float64': 8,
     'double': 8,
     'char': 1,
     'int': 4
@@ -43,6 +45,9 @@ def process_benchmark_file(file_path, warmup_ratio=0.2):
         print(f"Empty data error for file: {file_path}", file=sys.stderr)
         return None
 
+    if "highest" not in df.columns:
+        print(f"Missing 'highest' column in file: {file_path}", file=sys.stderr)
+        return None
 
     if "fugaku" in file_path:
         # Discard last line
@@ -57,6 +62,9 @@ def process_benchmark_file(file_path, warmup_ratio=0.2):
     # Drop negative values
     highest = highest[highest >= 0]
     n_iter = len(highest)
+    if n_iter == 0:
+        print(f"No valid non-negative samples in file: {file_path}", file=sys.stderr)
+        return None
 
     mean = np.mean(highest)
     median = np.median(highest)
@@ -113,17 +121,19 @@ def parse_filename(filename):
     Expected format: <array_dim>_<algo_name>_<dtype>.csv
     Example: 512_bine_static_over_int32.csv
     """
-    # Dirty, but do not want to waste time on regex
-    # Mannaggia a Lorenzo che non ha messo il datatype nel filename
-    filename = filename.split(".")[0]  # Remove the .csv extension
-    fields = filename.split("_")
+    stem = filename.rsplit(".", 1)[0]
+    fields = stem.split("_")
+    if len(fields) < 2:
+        raise ValueError(f"Unexpected benchmark filename '{filename}'.")
     array_dim = int(fields[0])
-    if fields[-1] != "int32":
-        dtype = "int32"
-        algo_name = "_".join(fields[1:])
-    else:
+    if fields[-1] in DTYPE_TO_BYTES:
         dtype = fields[-1]
         algo_name = "_".join(fields[1:-1])
+    else:
+        dtype = "int32"
+        algo_name = "_".join(fields[1:])
+    if not algo_name:
+        raise ValueError(f"Could not parse algorithm name from filename '{filename}'.")
 
     dtype_size = DTYPE_TO_BYTES.get(dtype, 4)  # Default to 4 bytes if unknown
     buffer_size = array_dim * dtype_size
@@ -134,10 +144,13 @@ def parse_filename(filename):
         'buffer_size': buffer_size
     }
 
-    # Legacy regex-based parser kept for reference:
-    # pattern = re.compile(r"(?P<array_dim>\d+)_(?P<algo_name>.+)_(?P<dtype>[^_]+)\.csv")
-    # match = pattern.match(filename)
-    # ...
+def _safe_extract(tar: tarfile.TarFile, path: str) -> None:
+    target = Path(path).resolve()
+    for member in tar.getmembers():
+        member_path = (target / member.name).resolve()
+        if target != member_path and target not in member_path.parents:
+            raise RuntimeError(f"Unsafe path in tar archive: {member.name}")
+    tar.extractall(path=path)
 
 def aggregate_results(results_dir: os.PathLike, metadata: pd.DataFrame, target_timestamp: str, system_name: str) -> pd.DataFrame:
     """
@@ -220,7 +233,7 @@ def main():
         if os.path.isfile(tar_path):
             print(f"Extracting {tar_path} to {os.path.dirname(this_results_dir)} for processing...")
             with tarfile.open(tar_path, "r:gz") as tar:
-                tar.extractall(path=os.path.dirname(this_results_dir))
+                _safe_extract(tar, os.path.dirname(this_results_dir))
         else:
             print(f"Directory {this_results_dir} does not exist and no tar.gz file found.", file=sys.stderr)
             sys.exit(1)

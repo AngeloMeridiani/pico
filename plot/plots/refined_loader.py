@@ -56,13 +56,22 @@ def load_data(
             continue
 
         for file_name in os.listdir(path):
+            file_path = os.path.join(path, file_name)
+            if not os.path.isfile(file_path):
+                continue
+            parts = file_name.strip().split("_")
+            if len(parts) < 2:
+                continue
+            try:
+                found_message_bytes = int(parts[0])
+            except ValueError:
+                continue
+
             if not congested and len(file_name.strip().split("_")) == 4:
                 continue
             if congested and len(file_name.strip().split("_")) == 3:
                 continue
 
-            parts = file_name.strip().split("_")
-            found_message_bytes = int(parts[0])
             if found_message_bytes != message_bytes:
                 continue
 
@@ -70,7 +79,6 @@ def load_data(
             if coll is not None and collective != coll:
                 continue
 
-            file_path = os.path.join(path, file_name)
             iterations = []
             latencies = []
             with open(file_path, "r") as file:
@@ -90,7 +98,7 @@ def load_data(
             else:
                 gb_sent = 0
 
-            bandwidth = [gb_sent / x for x in latencies if x != 0]
+            bandwidth = [(gb_sent / x) if x != 0 else 0.0 for x in latencies]
 
             dataset.data["latency"].extend(latencies)
             dataset.data["iteration"].extend(iterations)

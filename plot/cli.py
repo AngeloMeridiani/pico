@@ -22,9 +22,15 @@ from .plots.plot_bine_heatmap import BestBineHeatmapConfig, generate_best_bine_h
 from .plots.box_plot import BoxplotConfig, generate_boxplot
 from .plots.family_heatmap import FamilyHeatmapConfig, generate_family_heatmap
 from .plots.comparison_heatmap import ComparisonHeatmapConfig, generate_comparison_heatmap
+from .plots.default_vs_best_heatmap import DefaultVsBestHeatmapConfig, generate_default_vs_best_heatmap
+from .plots.default_vs_best_heatmap_dual import (
+    DefaultVsBestDualHeatmapConfig,
+    generate_default_vs_best_dual_heatmap,
+)
 from .plots.stacked_latency_plot import generate_stacked_latency_bars
 from .plots.refined_loader import RefinedDataset, load_data
 from .plots.refined_line_plot import generate_refined_line_plot
+from .utils import OUTPUT_FORMATS
 
 
 def _split_list(value: str | None) -> list[str] | None:
@@ -68,6 +74,7 @@ def _add_common_filters(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--min-dim", type=int, help="Minimum buffer size to keep.")
     parser.add_argument("--max-dim", type=int, help="Maximum buffer size to keep.")
     parser.add_argument("--output-dir", help="Directory where figures are written.")
+    parser.add_argument("--output-format", choices=OUTPUT_FORMATS, default="pdf", help="Figure format to write.")
 
 
 def _line_command(args) -> None:
@@ -82,6 +89,7 @@ def _line_command(args) -> None:
             error_col=args.error_col,
             error_mode=args.error_mode,
             output_dir=args.output_dir,
+            output_format=args.output_format,
         )
 
 
@@ -105,6 +113,7 @@ def _bar_command(args) -> None:
             threshold=args.std_threshold,
             marker_loc=args.marker_loc,
             output_dir=args.output_dir,
+            output_format=args.output_format,
         )
 
 
@@ -128,6 +137,7 @@ def _cut_command(args) -> None:
             threshold=args.std_threshold,
             marker_loc=args.marker_loc,
             output_dir=args.output_dir,
+            output_format=args.output_format,
         )
 
 
@@ -143,6 +153,7 @@ def _suite_command(args) -> None:
             error_col=args.error_col,
             error_mode=args.error_mode,
             output_dir=args.output_dir,
+            output_format=args.output_format,
         )
         normalized = normalize_dataset(
             subset,
@@ -156,7 +167,12 @@ def _suite_command(args) -> None:
             collective=collective,
             datatype=datatype,
             gpu_awareness=gpu_awareness,
+            errorbars=args.errorbars,
+            k=args.k,
+            threshold=args.std_threshold,
+            marker_loc=args.marker_loc,
             output_dir=args.output_dir,
+            output_format=args.output_format,
         )
         generate_cut_bar_plot(
             normalized,
@@ -164,7 +180,12 @@ def _suite_command(args) -> None:
             collective=collective,
             datatype=datatype,
             gpu_awareness=gpu_awareness,
+            errorbars=args.errorbars,
+            k=args.k,
+            threshold=args.cut_std_threshold,
+            marker_loc=args.marker_loc,
             output_dir=args.output_dir,
+            output_format=args.output_format,
         )
 
 
@@ -179,6 +200,7 @@ def _boxplot_command(args) -> None:
         exclude=args.exclude,
         metric=args.metric,
         output_dir=args.output_dir,
+        output_format=args.output_format,
     )
     generate_boxplot(cfg)
 def _heatmap_command(args) -> None:
@@ -192,6 +214,7 @@ def _heatmap_command(args) -> None:
         metric=args.metric,
         hide_y_labels=args.hide_y_labels,
         output_dir=args.output_dir,
+        output_format=args.output_format,
     )
     generate_family_heatmap(cfg)
 
@@ -208,6 +231,7 @@ def _comparison_heatmap_command(args) -> None:
         metric=args.metric,
         show_names=args.show_names,
         output_dir=args.output_dir,
+        output_format=args.output_format,
     )
     generate_comparison_heatmap(cfg)
 
@@ -219,8 +243,42 @@ def _bine_heatmap_command(args) -> None:
         metric=args.metric,
         runs=args.runs,
         output=args.output,
+        output_format=args.output_format,
     )
     generate_best_bine_heatmap(cfg)
+
+
+def _default_vs_best_heatmap_command(args) -> None:
+    cfg = DefaultVsBestHeatmapConfig(
+        system=args.system,
+        collective=args.collective,
+        runs=args.runs,
+        metric=args.metric,
+        default_pattern=args.default_pattern,
+        tasks_per_node=args.tasks_per_node,
+        exclude=args.exclude,
+        title=args.title,
+        output=args.output,
+        output_format=args.output_format,
+    )
+    generate_default_vs_best_heatmap(cfg)
+
+
+def _default_vs_best_dual_heatmap_command(args) -> None:
+    cfg = DefaultVsBestDualHeatmapConfig(
+        system=args.system,
+        collective=args.collective,
+        runs=args.runs,
+        metric=args.metric,
+        default_pattern=args.default_pattern,
+        ppn_left=args.ppn_left,
+        ppn_right=args.ppn_right,
+        exclude=args.exclude,
+        title=args.title,
+        output=args.output,
+        output_format=args.output_format,
+    )
+    generate_default_vs_best_dual_heatmap(cfg)
 
 
 def _refined_command(args) -> None:
@@ -274,12 +332,14 @@ def _refined_command(args) -> None:
         )
 
         title = args.title or f"{args.label}, {collective.capitalize()}, {args.nodes} nodes"
-        generate_refined_line_plot(dataset, title, output_dir=args.output_dir)
+        generate_refined_line_plot(dataset, title, output_dir=args.output_dir, output_format=args.output_format)
         generate_stacked_latency_bars(
             dataset,
             title,
+            collective=collective,
             sizes=tuple(messages),
             output_dir=args.output_dir,
+            output_format=args.output_format,
         )
         dataset.reset()
 
@@ -334,6 +394,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_filters(suite_parser)
     suite_parser.add_argument("--normalize-by", help="Reference algorithm used for normalization.")
     suite_parser.add_argument("--std-threshold", type=float, default=0.15, help="Std threshold for bar plot markers.")
+    suite_parser.add_argument("--errorbars", choices=("none", "se", "ci"), default="se", help="Error bar mode for bar plots.")
+    suite_parser.add_argument("--k", type=float, default=1.96, help="Multiplier for SE error bars.")
+    suite_parser.add_argument("--marker-loc", type=float, default=0.05, help="Marker vertical offset.")
     suite_parser.add_argument(
         "--cut-std-threshold",
         type=float,
@@ -362,6 +425,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Metric to convert into bandwidth for ranking.",
     )
     box_parser.add_argument("--output-dir", help="Target directory for the generated boxplot.")
+    box_parser.add_argument("--output-format", choices=OUTPUT_FORMATS, default="pdf", help="Figure format to write.")
     box_parser.set_defaults(func=_boxplot_command)
 
     refined_parser = subparsers.add_parser("refined", help="Generate refined line and latency plots.")
@@ -376,6 +440,7 @@ def build_parser() -> argparse.ArgumentParser:
     refined_parser.add_argument("--label", default="Experiment", help="Label prefix used in plot titles.")
     refined_parser.add_argument("--title", help="Override plot title (applied per collective).")
     refined_parser.add_argument("--output-dir", help="Directory where figures are written.")
+    refined_parser.add_argument("--output-format", choices=OUTPUT_FORMATS, default="png", help="Figure format to write.")
     refined_parser.set_defaults(func=_refined_command)
 
     heatmap_parser = subparsers.add_parser("heatmap", help="Generate algorithm family heatmaps.")
@@ -393,6 +458,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     heatmap_parser.add_argument("--hide-y-labels", action="store_true", help="Hide y-axis labels.")
     heatmap_parser.add_argument("--output-dir", help="Target directory for the generated heatmap.")
+    heatmap_parser.add_argument("--output-format", choices=OUTPUT_FORMATS, default="pdf", help="Figure format to write.")
     heatmap_parser.set_defaults(func=_heatmap_command)
 
     comp_parser = subparsers.add_parser("comparison-heatmap", help="Generate target algorithm ratio heatmaps.")
@@ -411,6 +477,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     comp_parser.add_argument("--show-names", action="store_true", help="Annotate cells with algorithm names.")
     comp_parser.add_argument("--output-dir", help="Target directory for the generated heatmap.")
+    comp_parser.add_argument("--output-format", choices=OUTPUT_FORMATS, default="pdf", help="Figure format to write.")
     comp_parser.set_defaults(func=_comparison_heatmap_command)
 
     bine_parser = subparsers.add_parser("bine-heatmap", help="Generate best-Bine variant heatmaps.")
@@ -437,7 +504,48 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="Optional output PDF path. Defaults to plot/<system>/heatmaps/<collective>/<system>_<collective>_best_bine_variant.pdf",
     )
+    bine_parser.add_argument("--output-format", choices=OUTPUT_FORMATS, default="pdf", help="Figure format to write.")
     bine_parser.set_defaults(func=_bine_heatmap_command)
+
+    default_best_parser = subparsers.add_parser("default-vs-best-heatmap", help="Generate default-vs-best heatmaps.")
+    default_best_parser.add_argument("--system", required=True, help="System name (e.g. leonardo).")
+    default_best_parser.add_argument("--collective", required=True, help="Collective to plot.")
+    default_best_parser.add_argument("--runs", nargs="+", required=True, metavar="TIMESTAMP:NODES", help="Result runs.")
+    default_best_parser.add_argument(
+        "--metric",
+        choices=("mean", "median", "percentile_90"),
+        default="mean",
+        help="Metric used to rank algorithms.",
+    )
+    default_best_parser.add_argument("--default-pattern", default=r"^default(?:[_-](?:ompi|mpich|nccl|default))?$")
+    default_best_parser.add_argument("--tasks-per-node", type=int, dest="tasks_per_node")
+    default_best_parser.add_argument("--exclude", help="Exclude algorithms that match this regex.")
+    default_best_parser.add_argument("--title", help="Override plot title.")
+    default_best_parser.add_argument("--output", help="Output file path.")
+    default_best_parser.add_argument("--output-format", choices=OUTPUT_FORMATS, default="pdf", help="Figure format to write.")
+    default_best_parser.set_defaults(func=_default_vs_best_heatmap_command)
+
+    default_best_dual_parser = subparsers.add_parser(
+        "default-vs-best-heatmap-dual",
+        help="Generate paired default-vs-best heatmaps for two task-per-node values.",
+    )
+    default_best_dual_parser.add_argument("--system", required=True, help="System name (e.g. leonardo).")
+    default_best_dual_parser.add_argument("--collective", required=True, help="Collective to plot.")
+    default_best_dual_parser.add_argument("--runs", nargs="+", required=True, metavar="TIMESTAMP:NODES", help="Result runs.")
+    default_best_dual_parser.add_argument(
+        "--metric",
+        choices=("mean", "median", "percentile_90"),
+        default="mean",
+        help="Metric used to rank algorithms.",
+    )
+    default_best_dual_parser.add_argument("--default-pattern", default=r"^default(?:[_-](?:ompi|mpich|nccl|default))?$")
+    default_best_dual_parser.add_argument("--ppn-left", type=int, default=1)
+    default_best_dual_parser.add_argument("--ppn-right", type=int, default=4)
+    default_best_dual_parser.add_argument("--exclude", help="Exclude algorithms that match this regex.")
+    default_best_dual_parser.add_argument("--title", help="Override plot title.")
+    default_best_dual_parser.add_argument("--output", help="Output file path.")
+    default_best_dual_parser.add_argument("--output-format", choices=OUTPUT_FORMATS, default="pdf", help="Figure format to write.")
+    default_best_dual_parser.set_defaults(func=_default_vs_best_dual_heatmap_command)
 
     return parser
 

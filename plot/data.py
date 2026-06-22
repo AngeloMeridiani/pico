@@ -32,13 +32,16 @@ def extract_metadata(df: pd.DataFrame) -> PlotMetadata:
     """
     row = df.iloc[0]
     tasks_per_node = row.get("tasks_per_node")
+    gpu_lib = row.get("gpu_lib", "CPU")
+    if pd.isna(gpu_lib):
+        gpu_lib = "CPU"
     return PlotMetadata(
         system=row["system"],
         timestamp=row["timestamp"],
         mpi_lib=row["mpi_lib"],
         nnodes=str(row["nnodes"]),
         tasks_per_node=int(tasks_per_node) if pd.notna(tasks_per_node) else 1,
-        gpu_lib=row.get("gpu_lib", "CPU"),
+        gpu_lib=str(gpu_lib).upper(),
     )
 
 
@@ -59,9 +62,11 @@ def filter_summary(
     filtered = df.copy()
 
     if collective:
-        filtered = filtered[filtered["collective_type"] == collective]
+        collectives = [item.strip() for item in collective.split(",") if item.strip()]
+        filtered = filtered[filtered["collective_type"].isin(collectives)]
     if datatype:
-        filtered = filtered[filtered["datatype"] == datatype]
+        datatypes = [item.strip() for item in datatype.split(",") if item.strip()]
+        filtered = filtered[filtered["datatype"].isin(datatypes)]
     if algorithm:
         algorithms = list(algorithm)
         filtered = filtered[filtered["algo_name"].isin(algorithms)]
@@ -168,13 +173,18 @@ def normalize_dataset(
     has_se = se_col in df.columns
     has_ci = (ci_lower_col in df.columns) and (ci_upper_col in df.columns)
 
+    missing_baselines: list[object] = []
+    invalid_baselines: list[object] = []
+
     for key, group in df.groupby(group_key):
         base_row = group.loc[group["algo_name"] == chosen_base]
         if base_row.empty:
-            continue  # no baseline for this group; leave NaNs, filled later
+            missing_baselines.append(key)
+            continue
 
         mu_b = float(base_row[metric_col].iloc[0])
         if mu_b == 0.0 or not np.isfinite(mu_b):
+            invalid_baselines.append(key)
             continue
 
         # Point estimate ratio
@@ -224,7 +234,17 @@ def normalize_dataset(
                 norm_ci_lo.loc[base_idx] = 1.0
                 norm_ci_hi.loc[base_idx] = 1.0
 
-    df["normalized_mean"] = norm_mean.fillna(1.0)
+    if missing_baselines or invalid_baselines:
+        details = []
+        if missing_baselines:
+            details.append(f"missing groups={missing_baselines}")
+        if invalid_baselines:
+            details.append(f"invalid groups={invalid_baselines}")
+        raise ValueError(
+            f"Baseline algorithm '{chosen_base}' is not usable for normalization ({'; '.join(details)})."
+        )
+
+    df["normalized_mean"] = norm_mean
 
     if has_se:
         df["normalized_se"] = norm_se.fillna(0.0)
