@@ -10,6 +10,7 @@ import pandas as pd
 
 from .data import (
     drop_unused_columns,
+    ensure_gpu_awareness_column,
     extract_metadata,
     filter_summary,
     normalize_dataset,
@@ -37,6 +38,7 @@ def _load_filtered_dataframe(args) -> tuple[pd.DataFrame, object]:
     df = read_summary(args.summary_file)
     metadata = extract_metadata(df)
     df = drop_unused_columns(df)
+    df = ensure_gpu_awareness_column(df)
     df = filter_summary(
         df,
         collective=args.collective,
@@ -50,11 +52,11 @@ def _load_filtered_dataframe(args) -> tuple[pd.DataFrame, object]:
     return df, metadata
 
 
-def _iter_groups(df: pd.DataFrame) -> Iterable[tuple[str, str, pd.DataFrame]]:
+def _iter_groups(df: pd.DataFrame) -> Iterable[tuple[str, str, str, pd.DataFrame]]:
     for datatype, subdf in df.groupby("datatype"):
         for collective, subgroup in subdf.groupby("collective_type"):
-            for gpu_awareness, subsubgroup in subgroup.groupby("gpu_awareness"):
-                yield datatype, collective, gpu_awareness, subsubgroup.copy()
+            for gpu_awareness, subsubgroup in subgroup.groupby("gpu_awareness", dropna=False):
+                yield datatype, collective, str(gpu_awareness), subsubgroup.copy()
 
 
 def _add_common_filters(parser: argparse.ArgumentParser) -> None:
@@ -131,7 +133,7 @@ def _cut_command(args) -> None:
 
 def _suite_command(args) -> None:
     df, metadata = _load_filtered_dataframe(args)
-    for datatype, collective, gpu_awareness ,subset in _iter_groups(df):
+    for datatype, collective, gpu_awareness, subset in _iter_groups(df):
         generate_line_plot(
             subset,
             metadata=metadata,

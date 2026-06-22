@@ -2,8 +2,8 @@
 """
 Grouped bar chart of normalized "execution time" with error bars.
 
-Baseline (first bar): Rabenseifner 2 rails, normalized to 1.0
-Second bar: Rabenseifner 4 rails, normalized to baseline, with correct direction.
+Baseline (first bar): Ring 2 rails, normalized to 1.0
+Second bar: Ring 4 rails, normalized to baseline, with correct direction.
 
 Key point:
 - If mean is TIME (lower is better): normalized = mean_4 / mean_2
@@ -24,8 +24,8 @@ try:
 except ImportError:  # pragma: no cover - fallback for direct script execution
     from utils import apply_adaptive_legend, style_axes
 
-BASELINE_ALGO = "rabenseifner_(2_rails)_ompi"
-COMPARE_ALGO  = "rabenseifner_(4_rails)_ompi"
+BASELINE_ALGO = "ring_(2_rails)_ompi"
+COMPARE_ALGO  = "ring_(4_rails)_ompi"
 
 
 def bytes_to_human(n: int) -> str:
@@ -48,7 +48,7 @@ def main():
     ap.add_argument("-o", "--out", default="", help="Output image path (e.g., plot.png). If omitted, shows window.")
     ap.add_argument("--error-col", default="standard_error",
                     help="Column to use for error bars (e.g., standard_error, std). Default: standard_error")
-    ap.add_argument("--metric", choices=["time", "throughput"], default="throughput",
+    ap.add_argument("--metric", choices=["time", "throughput"], default="time",
                     help="How to interpret 'mean'. If throughput, we plot normalized *time* via baseline/compare.")
     ap.add_argument(
         "--propagate-baseline",
@@ -127,9 +127,9 @@ def main():
     c0, c1 = cmap(0), cmap(1)
 
     ax.bar(x - width/2, y2, width, yerr=y2_err, capsize=4,
-           label="Rabenseifner (2 Rails)", color=c0, edgecolor="black")
+           label="Ring (2 Rails)", color=c0, edgecolor="black")
     ax.bar(x + width/2, y4, width, yerr=y4_err, capsize=4,
-           label="Rabenseifner (4 Rails)", color=c1, edgecolor="black")
+           label="Ring (4 Rails)", color=c1, edgecolor="black")
 
     ax.set_ylabel("Normalized Execution Time", fontsize=20)
     ax.set_xticks(x)

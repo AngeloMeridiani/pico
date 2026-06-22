@@ -16,6 +16,8 @@ from ..utils import (
     draw_errorbars,
     ensure_dir,
     format_bytes,
+    gpu_awareness_label,
+    gpu_awareness_suffix,
     sort_key,
     style_axes,
 )
@@ -163,13 +165,13 @@ def generate_cut_bar_plot(
     ax_bot.set_ylabel("Normalized Mean Execution Time", fontsize=15)
     ax_top.set_ylabel("")
 
+    execution_mode = gpu_awareness_label(gpu_awareness)
     if metadata.total_nodes == metadata.mpi_tasks:
-        title = f"{metadata.system}, {collective.lower()}, {metadata.nnodes} nodes ({datatype}) {'GPU' if gpu_awareness == 'yes' else 'CPU'}"
+        title = f"{metadata.system}, {collective.lower()}, {metadata.nnodes} nodes ({datatype}, {execution_mode})"
     else:
         title = (
             f"{metadata.system}, {collective.lower()}, {metadata.nnodes} nodes "
-            f"({datatype}, {metadata.mpi_tasks} tasks)"
-            f"{'GPU' if gpu_awareness == 'yes' else 'CPU'}"
+            f"({datatype}, {metadata.mpi_tasks} tasks, {execution_mode})"
         )
     fig.suptitle(title, fontsize=18)
 
@@ -184,7 +186,10 @@ def generate_cut_bar_plot(
     plt.tight_layout(rect=(0.0, 0.0, 1.0, 0.97))
 
     target_dir = _resolve_output_dir(metadata.system, output_dir)
-    name = f"{collective.lower()}_{metadata.nnodes}_{datatype}_{metadata.timestamp}_barplot_cut{'_gpu_aware' if gpu_awareness == 'yes' else ''}_{errorbars}.pdf"
+    name = (
+        f"{collective.lower()}_{metadata.nnodes}_{datatype}_{metadata.timestamp}_"
+        f"barplot_cut{gpu_awareness_suffix(gpu_awareness)}_{errorbars}.pdf"
+    )
     full_path = target_dir / name
     plt.savefig(full_path, dpi=300)
     plt.close()

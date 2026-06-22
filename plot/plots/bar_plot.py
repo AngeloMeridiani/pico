@@ -16,6 +16,8 @@ from ..utils import (
     draw_errorbars,   # updated selectable version
     ensure_dir,
     format_bytes,
+    gpu_awareness_label,
+    gpu_awareness_suffix,
     sort_key,
     style_axes,
 )
@@ -108,13 +110,13 @@ def generate_bar_plot(
         apply_adaptive_legend(ax, handles=handles, labels=new_labels, loc="lower left")
 
     # Title
+    execution_mode = gpu_awareness_label(gpu_awareness)
     if metadata.total_nodes == metadata.mpi_tasks:
-        title = f"{metadata.system.capitalize()}, {collective.lower().capitalize()}, {metadata.nnodes} nodes {'GPU' if gpu_awareness == 'yes' else 'CPU'}"
+        title = f"{metadata.system.capitalize()}, {collective.lower().capitalize()}, {metadata.nnodes} nodes ({execution_mode})"
     else:
         title = (
             f"{metadata.system.capitalize()}, {collective.lower().capitalize()}, "
-            f"{metadata.nnodes} nodes ({metadata.mpi_tasks} tasks)"
-            f"{'GPU' if gpu_awareness == 'yes' else 'CPU'}"
+            f"{metadata.nnodes} nodes ({metadata.mpi_tasks} tasks, {execution_mode})"
         )
     plt.title(title, fontsize=18)
     plt.xlabel("Message Size", fontsize=15)
@@ -126,7 +128,10 @@ def generate_bar_plot(
     target_dir = _resolve_output_dir(metadata.system, output_dir)
 
     # Include error bar mode in filename so artifacts are distinguishable
-    name = f"{collective.lower()}_{metadata.nnodes}_{datatype}_{metadata.timestamp}_{errorbars}_barplot{'_gpu_aware' if gpu_awareness == 'yes' else ''}_{errorbars}.pdf"
+    name = (
+        f"{collective.lower()}_{metadata.nnodes}_{datatype}_{metadata.timestamp}_"
+        f"{errorbars}_barplot{gpu_awareness_suffix(gpu_awareness)}.pdf"
+    )
     full_path = target_dir / name
 
     plt.savefig(full_path, dpi=300)

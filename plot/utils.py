@@ -52,6 +52,28 @@ def human_readable_size(num_bytes: float | int) -> str:
     return f"{int(round(value))} PiB"
 
 
+def normalize_gpu_awareness(value) -> str:
+    """
+    Normalize metadata values to the CSV convention used by the benchmark scripts.
+    """
+    if value is None:
+        return "no"
+    if isinstance(value, float) and np.isnan(value):
+        return "no"
+    text = str(value).strip().lower()
+    if text in {"yes", "true", "1", "gpu", "cuda"}:
+        return "yes"
+    return "no"
+
+
+def gpu_awareness_label(value) -> str:
+    return "GPU" if normalize_gpu_awareness(value) == "yes" else "CPU"
+
+
+def gpu_awareness_suffix(value) -> str:
+    return "_gpu_aware" if normalize_gpu_awareness(value) == "yes" else ""
+
+
 def sort_key(algo: str) -> tuple[int, str]:
     """
     Stable ordering for algorithm names so plots look consistent.

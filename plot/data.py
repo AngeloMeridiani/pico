@@ -9,7 +9,7 @@ from typing import Iterable
 import pandas as pd
 import numpy as np
 
-from .utils import PlotMetadata
+from .utils import PlotMetadata, normalize_gpu_awareness
 
 
 class SummaryEmptyError(RuntimeError):
@@ -109,6 +109,18 @@ def drop_unused_columns(df: pd.DataFrame) -> pd.DataFrame:
         if len(uniques) <= 1:
             cleaned = cleaned.drop(columns=col)
 
+    return cleaned
+
+
+def ensure_gpu_awareness_column(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure summary plots can always group by CPU/GPU-aware execution mode.
+    """
+    cleaned = df.copy()
+    if "gpu_awareness" not in cleaned.columns:
+        cleaned["gpu_awareness"] = "no"
+    else:
+        cleaned["gpu_awareness"] = cleaned["gpu_awareness"].map(normalize_gpu_awareness)
     return cleaned
 
 

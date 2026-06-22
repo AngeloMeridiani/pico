@@ -17,6 +17,8 @@ from ..utils import (
     ensure_dir,
     format_time_units_ns,
     format_bytes,
+    gpu_awareness_label,
+    gpu_awareness_suffix,
     sort_key,
     style_axes,
 )
@@ -220,13 +222,13 @@ def generate_line_plot(
     ax.yaxis.set_major_formatter(format_time_units_ns)
     # ax.tick_params(axis="both", labelsize=18)
 
+    execution_mode = gpu_awareness_label(gpu_awareness)
     if metadata.total_nodes == metadata.mpi_tasks:
-        title = f"{metadata.system.capitalize()}, {collective.lower().capitalize()}, {metadata.nnodes} nodes {'GPU' if gpu_awareness == 'yes' else 'CPU'}"
+        title = f"{metadata.system.capitalize()}, {collective.lower().capitalize()}, {metadata.nnodes} nodes ({execution_mode})"
     else:
         title = (
             f"{metadata.system.capitalize()}, {collective.lower().capitalize()}, "
-            f"{metadata.nnodes} nodes ({metadata.mpi_tasks} tasks)"
-            f"{'GPU' if gpu_awareness == 'yes' else 'CPU'}"
+            f"{metadata.nnodes} nodes ({metadata.mpi_tasks} tasks, {execution_mode})"
         )
 
     plt.title(title, fontsize=18)
@@ -247,7 +249,7 @@ def generate_line_plot(
 
     target_dir = _resolve_output_dir(metadata.system, output_dir)
     suffix = f"{error_col}_lineplot" if error_col else "lineplot"
-    name = f"{collective.lower()}_{metadata.nnodes}_{datatype}_{metadata.timestamp}_{suffix}{'_gpu_aware' if gpu_awareness == 'yes' else ''}.pdf"
+    name = f"{collective.lower()}_{metadata.nnodes}_{datatype}_{metadata.timestamp}_{suffix}{gpu_awareness_suffix(gpu_awareness)}.pdf"
     name_pdf = name.replace(".png", ".pdf")
     full_path = target_dir / name
     full_path_pdf = target_dir / name_pdf

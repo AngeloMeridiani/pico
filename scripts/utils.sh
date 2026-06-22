@@ -1607,6 +1607,8 @@ run_library_tui() {
     local ver="$(_get_var "LIB_${i}_VERSION")"
     inform "▶ Running library $i: ${name:-<unknown>} ${ver:-}"
 
+    ucx_info -c > "$OUTPUT_DIR/lib_${i}_ucx_info.txt" 2>&1 || true
+
     for coll in ${lib_collectives//,/ }; do
         run_collective_for_lib "$i" "$coll" "$iter_name" || { restore_lib_context "$i"; return 1; }
     done
