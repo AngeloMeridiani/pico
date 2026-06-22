@@ -3,6 +3,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/HLC-Lab/pico?style=social)](https://github.com/HLC-Lab/pico/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](https://github.com/HLC-Lab/pico/issues)
+[![Paper: ISC 2026](https://img.shields.io/badge/Paper-ISC%202026-blue.svg)](https://ieeexplore.ieee.org/abstract/document/11520486)
 
 > 💫 If you find **PICO** useful for your research or benchmarking work, please consider giving it a ⭐ on [GitHub](https://github.com/HLC-Lab/pico)!
 
@@ -20,6 +21,25 @@ Built for researchers, developers, and system administrators, PICO streamlines t
 - 🧭 **Per-phase instrumentation**, going beyond micro-benchmarking, hence the name PICO
 - 🧵 Queue-friendly orchestration that compiles, ships, and archives jobs seamlessly on **SLURM clusters** or in local mode for debugging.
 - 📊 **Bundled plotting, tracing, and scheduling utilities** for streamlined post-processing and algorithm engineering.
+
+## 📚 Publication
+
+If you use **PICO** in your work, please cite the PICO paper:
+
+> S. Pasqualoni, T. Bonato, L. Piarulli, T. Hoefler, M. Canini and D. De Sensi, **"PICO: Performance Insights for Collective Operations"**, *ISC High Performance 2026 Research Paper Proceedings (41st International Conference), Hamburg, Germany, 2026, pp. 1-14*,  DOI: [10.23919/ISC.2026.11520486](https://doi.org/10.23919/ISC.2026.11520486).
+
+```bibtex
+@INPROCEEDINGS{11520486,
+  author={Pasqualoni, Saverio and Bonato, Tommaso and Piarulli, Lorenzo and Hoefler, Torsten and Canini, Marco and De Sensi, Daniele},
+  booktitle={ISC High Performance 2026 Research Paper Proceedings (41st International Conference)}, 
+  title={PICO: Performance Insights for Collective Operations}, 
+  year={2026},
+  volume={},
+  number={},
+  pages={1-14},
+  keywords={Algorithms;High performance computing;Libraries;Uniform resource locators;Modeling;Management information base;Conferences;Distance measurement;Broadcasting;Graphics processing units;High performance computing;Performance analysis;Computer networks;Message passing;Software Tools},
+  doi={10.23919/ISC.2026.11520486}}
+```
 
 ## Architecture at a Glance
 
