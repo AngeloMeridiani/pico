@@ -112,7 +112,7 @@ else
               "Any GPU aware:      ${ANY_GPU_AWARE}"
     fi
 
-    SLURM_PARAMS=" --account $PICO_ACCOUNT --nodes $N_NODES --time $TEST_TIME --partition $PARTITION"
+    SLURM_PARAMS=" --account $PICO_ACCOUNT --nodes $N_NODES --time $TEST_TIME --partition $PARTITION $INJECT_PARAMS"
 
     if [[ -n "$QOS" ]]; then
         SLURM_PARAMS+=" --qos $QOS"
