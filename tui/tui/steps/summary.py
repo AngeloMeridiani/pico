@@ -173,6 +173,11 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
         else:
             lines.append("# skipped: test.test_time missing")
 
+        if "inject_params" in test:
+            write_export("INJECT_PARAMS", test["inject_params"], quote=True)
+        else:
+            lines.append("# skipped: test.inject_params missing")
+
         # dimensions
         dims = test.get("dimensions")
         if not isinstance(dims, dict):
