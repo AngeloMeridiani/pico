@@ -131,7 +131,7 @@ class StepScreen(Screen):
             widget._options = []
             widget._setup_variables_for_options([])
             widget._setup_options_renderables()
-        widget.value = Select.BLANK
+        widget.value = Select.NULL
         widget.disabled = disable
 
     def reset_input(self, widget: Input, disable: bool = True):
