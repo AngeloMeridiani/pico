@@ -1321,8 +1321,11 @@ cleanup_and_return:
   return err;
 }
 
-
 #ifdef PICO_MPI_CUDA_AWARE
 // TODO: add allreduce_bine_bdw_hier_gpu
 #endif
 
+// write NCCL implementations here
+#ifdef PICO_NCCL
+
+#endif

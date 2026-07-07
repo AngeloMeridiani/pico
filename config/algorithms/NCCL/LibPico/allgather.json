@@ -1,0 +1,23 @@
+{
+  "bine_block_by_block_nccl_over": {
+    "desc": "libpico external bine block by block algorithm.",
+    "version": "1.0.0",
+    "constraints": [
+      {
+        "key": "count",
+        "conditions": [
+          {
+            "operator": ">=",
+            "value": "comm_sz"
+          }
+        ]
+      }
+    ],
+    "selection": "pico",
+    "tags": [
+      "bine",
+      "cuda",
+      "external"
+    ]
+  }
+}

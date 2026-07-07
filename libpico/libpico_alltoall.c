@@ -198,3 +198,8 @@ err_hndl:
   if(tmpbuf != NULL) free(tmpbuf);
   return err;
 }
+
+// write NCCL implementations here
+#ifdef PICO_NCCL
+
+#endif

@@ -126,6 +126,52 @@ static inline void pico_get_group_config(int *node_size, int *node_rank, int *no
   *local_rank = rank % task_on_node;
 }
 
+#define BINE_NCCL_CHECK(cmd)                              \
+  do                                                      \
+  {                                                       \
+    ncclResult_t e = cmd;                            \
+    if (e != ncclSuccess)                            \
+    {                                                     \
+      fprintf(stderr, "Failed: NCCL error %s:%d '%s'\n",  \
+              __FILE__, __LINE__, ncclGetErrorString(e)); \
+      exit(EXIT_FAILURE);                                 \
+    }                                                     \
+  } while (0)
+
+#ifdef PICO_NCCL
+size_t pico_get_nccl_type_size(ncclDataType_t type)
+{
+  switch (type)
+  {
+  /* 1 Byte */
+  case ncclInt8:
+  case ncclUint8:
+    return 1;
+
+  /* 2 Byte */
+  case ncclFloat16:
+    return 2;
+
+  /* 4 Byte */
+  case ncclInt32:
+  case ncclUint32:
+  case ncclFloat32:
+    return 4;
+
+  /* 8 Byte */
+  case ncclInt64:
+  case ncclUint64:
+  case ncclFloat64:
+    return 8;
+
+  /* Gestione degli errori */
+  case ncclNumTypes:
+  default:
+    return 0;
+  }
+}
+#endif
+
 #ifdef PICO_MPI_CUDA_AWARE
 
 static inline int copy_buffer_cuda(const void *input_buffer, void *output_buffer,

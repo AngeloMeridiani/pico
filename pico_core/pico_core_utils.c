@@ -147,6 +147,8 @@ static inline allgather_func_ptr get_allgather_function(const char *algorithm) {
   PICO_CORE_DEBUG_PRINT_STR("MPI_Allgather");
   return allgather_wrapper;
 #else
+  CHECK_STR(algorithm, "bine_block_by_block_nccl_over", allgather_bine_block_by_block_nccl);
+
   return ncclAllGather;
 #endif
 }

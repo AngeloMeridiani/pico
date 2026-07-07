@@ -1998,6 +1998,79 @@ err_hndl:
   return err;
 }
 
+// write NCCL implementations here
+#ifdef PICO_NCCL
+int allgather_bine_block_by_block_nccl(const void *sbuf, void* rbuf, size_t count, ncclDataType_t dtype, ncclComm_t nccl_comm, cudaStream_t stream){
+  int line = -1, rank, size, steps, err = MPI_SUCCESS, remote;
+  int *s_bitmap = NULL, *r_bitmap = NULL;
+  ptrdiff_t rlb, rext;
+  char *tmpsend = NULL, *tmprecv = NULL;
+
+  ncclCommUserRank(nccl_comm, &rank);
+  ncclCommCount(nccl_comm, &size);
+
+  steps = log_2(size);
+  if(!is_power_of_two(size) || steps < 1) {
+    BINE_DEBUG_PRINT("ERROR! bine static allgather works only with po2 ranks!");
+    return MPI_ERR_ARG;
+  }
+
+  rext = pico_get_nccl_type_size(dtype);
+  if(MPI_SUCCESS != err) { line = __LINE__; goto err_hndl; }
+
+  if(MPI_IN_PLACE != sbuf) {
+    tmpsend = (char*) sbuf;
+    tmprecv = (char*) rbuf + (ptrdiff_t)rank * (ptrdiff_t)count * rext;
+
+    BINE_CUDA_CHECK(cudaMemcpy(tmprecv, tmpsend, count * rext, cudaMemcpyDeviceToDevice));
+  }
+  s_bitmap = (int *) malloc(size * sizeof(int));
+  r_bitmap = (int *) malloc(size * sizeof(int));
+  if(s_bitmap == NULL || r_bitmap == NULL){
+    line = __LINE__;
+    err = MPI_ERR_NO_MEM;
+    goto err_hndl;
+  }
+
+
+  for(int step = steps - 1; step >= 0; step--) {
+    int num_reqs = 0;
+    remote = pi(rank, step, size);
+
+    memset(s_bitmap, 0, size * sizeof(int));
+    memset(r_bitmap, 0, size * sizeof(int));
+    get_indexes(rank, step, steps, size, r_bitmap);
+    get_indexes(remote, step, steps, size, s_bitmap);
+
+    BINE_NCCL_CHECK(ncclGroupStart());
+    for(int block = 0; block < size; block++){
+      if(s_bitmap[block] != 0){
+        tmpsend = (char*)rbuf + (ptrdiff_t)block * (ptrdiff_t)count * rext;
+        BINE_NCCL_CHECK(ncclSend(tmpsend, count, dtype, remote, nccl_comm, stream));
+      }
+      if(r_bitmap[block] != 0){
+        tmprecv = (char*)rbuf + (ptrdiff_t)block * (ptrdiff_t)count * rext;
+        BINE_NCCL_CHECK(ncclRecv(tmprecv, count, dtype, remote, nccl_comm, stream));
+      }
+    }
+    BINE_NCCL_CHECK(ncclGroupEnd());
+  }
+
+
+  free(s_bitmap);
+  free(r_bitmap);
+
+  return MPI_SUCCESS;
+
+err_hndl:
+  BINE_DEBUG_PRINT("\n%s:%4d\tError occurred %d, rank %2d\n\n", __FILE__, line, err, rank);
+  (void)line;  // silence compiler warning
+  if(s_bitmap != NULL) free(s_bitmap);
+  if(r_bitmap != NULL) free(r_bitmap);
+  return err;
+}
+#endif
+
 
 // ---------------------------------------------------
 // MODIFICATIONS INTRODUCTED BY LORENZO

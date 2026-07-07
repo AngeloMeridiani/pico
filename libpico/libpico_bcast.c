@@ -780,3 +780,8 @@ err_hndl:
   if(NULL!= recvcounts) free(recvcounts);
   return err;
 }
+
+// write NCCL implementations here
+#ifdef PICO_NCCL
+
+#endif
