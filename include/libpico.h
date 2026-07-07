@@ -59,6 +59,10 @@ int allreduce_bine_lat(ALLREDUCE_MPI_ARGS);
 int allreduce_bine_bdw_remap(ALLREDUCE_MPI_ARGS);
 int allreduce_bine_bdw_remap_segmented(ALLREDUCE_MPI_ARGS);
 int allreduce_bine_block_by_block_any_even(ALLREDUCE_MPI_ARGS);
+// write here the prototype of NCCL allreduce functions
+#ifdef PICO_NCCL
+// int allreduce_nccl_custom(ALLREDUCE_NCCL_ARGS)
+#endif
 
 int allgather_k_bruck(ALLGATHER_MPI_ARGS);
 int allgather_recursivedoubling(ALLGATHER_MPI_ARGS);
@@ -75,9 +79,18 @@ int allgather_recursivedoubling_hierarchy(ALLGATHER_MPI_ARGS);
 int allgather_recursivedoubling_hierarchy_local_parallel(ALLGATHER_MPI_ARGS);
 int allgather_bine_block_by_block_hierarcic_global_local(ALLGATHER_MPI_ARGS);
 int allgather_bine_send_remap_hierarcic_global_local(ALLGATHER_MPI_ARGS);
+// write here the prototype of NCCL allgather functions
+#ifdef PICO_NCCL
+// int allgather_nccl_custom(ALLGATHER_NCCL_ARGS)
+int allgather_bine_block_by_block_nccl(ALLGATHER_NCCL_ARGS);
+#endif
 
 int alltoall_pairwise_ompi(ALLTOALL_MPI_ARGS);
 int alltoall_bine(ALLTOALL_MPI_ARGS);
+// write here the prototype of NCCL alltoall functions
+#ifdef PICO_NCCL
+// int alltoall_nccl_custom(ALLTOALL_NCCL_ARGS)
+#endif
 
 int bcast_linear(BCAST_MPI_ARGS);
 int bcast_binomial_halving(BCAST_MPI_ARGS);
@@ -88,12 +101,24 @@ int bcast_bine_lat_reversed(BCAST_MPI_ARGS);
 int bcast_bine_lat_new(BCAST_MPI_ARGS);
 int bcast_bine_lat_i_new(BCAST_MPI_ARGS);
 int bcast_bine_bdw_remap(BCAST_MPI_ARGS);
+// write here the prototype of NCCL bcast functions
+#ifdef PICO_NCCL
+// int bcast_nccl_custom(BCAST_NCCL_ARGS)
+#endif
 
 int gather_linear(GATHER_MPI_ARGS);
 int gather_bine(GATHER_MPI_ARGS);
+// write here the prototype of NCCL gather functions
+#ifdef PICO_NCCL
+// int gather_nccl_custom(GATHER_NCCL_ARGS)
+#endif
 
 int reduce_bine_lat(REDUCE_MPI_ARGS);
 int reduce_bine_bdw(REDUCE_MPI_ARGS);
+// write here the prototype of NCCL reduce functions
+#ifdef PICO_NCCL
+// int reduce_nccl_custom(REDUCE_NCCL_ARGS)
+#endif
 
 int reduce_scatter_recursive_doubling_gpu(REDUCE_SCATTER_MPI_ARGS);
 int reduce_scatter_recursive_doubling_hierarchical_local_parallel(REDUCE_SCATTER_MPI_ARGS);
@@ -107,9 +132,17 @@ int reduce_scatter_bine_permute_remap(REDUCE_SCATTER_MPI_ARGS);
 int reduce_scatter_bine_block_by_block(REDUCE_SCATTER_MPI_ARGS);
 int reduce_scatter_bine_block_by_block_hierarchical(REDUCE_SCATTER_MPI_ARGS);
 int reduce_scatter_bine_block_by_block_any_even(REDUCE_SCATTER_MPI_ARGS);
+// write here the prototype of NCCL reduce scatter functions
+#ifdef PICO_NCCL
+// int reduce_scatter_nccl_custom(REDUCE_SCATTER_NCCL_ARGS)
+#endif
 
 int scatter_linear(SCATTER_MPI_ARGS);
 int scatter_bine(SCATTER_MPI_ARGS);
+// write here the prototype of NCCL scatter functions
+#ifdef PICO_NCCL
+// int scatter_nccl_custom(SCATTER_NCCL_ARGS)
+#endif
 
 /**
  * Instrumentation support

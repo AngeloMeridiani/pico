@@ -143,3 +143,7 @@ err_hndl:
   return err;
 }
 
+// write NCCL implementations here
+#ifdef PICO_NCCL
+
+#endif
