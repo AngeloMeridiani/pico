@@ -382,10 +382,16 @@ def json_to_exports(config: JsonLike, sh_path: Union[str, Path]) -> str:
                     # CVARS (MPICH-family only)
                     if is_mpich_family:
                         cvars: List[str] = []
+                        bine_imps: List[str] = []
                         for e in entries:
                             sel = e.get("selection", "auto")
+                            bine_val = e.get("bine_imp")
+                            if not bine_val:
+                                bine_val = "none"
+                            bine_imps.append(str(bine_val))
                             cvars.append("auto" if sel == "pico" else str(sel))
                         write_export(prefix + f"{coll_key.upper()}_ALGORITHMS_CVARS", csv(cvars), quote=True)
+                        write_export(prefix + f"{coll_key.upper()}_ALGORITHMS_BINE_IMPS", csv(bine_imps), quote=True)
 
     # --- Write file and chmod +x ---
     out_path.parent.mkdir(parents=True, exist_ok=True)
